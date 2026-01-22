@@ -12,12 +12,22 @@ $$\phi(r)=\frac{1}{\log\left(\frac{R_{max}}{R_{min}}\right)}\left(\phi_2 \log\le
 The robin BC is implemented as follows: 
 
 At the left IB interface, the flux is given by 
-$$ d \phi_{i-1/2} / d n$ 
+
+$$ d \phi_{i-1/2} / dn$ 
 
 This can be expanded into 
 
-$$ \frac{\phi_{c} - \phi_{IB}}/ n $$ 
+$$ \frac{\phi_{c} - \phi_{IB}}/ d $$ 
 
+The robin boundary condition is given by 
+
+$$ a \phi_{IB} + b \phi_IB = f $$ 
+
+$$ a \phi_{IB} + b \frac{\phi_c - \phi_{IB}}/ d = f $$ 
+
+$$ (a+b/d) \phi_IB + b/d \frac{\phi_c} = f $$ 
+
+$$ \phi_IB = \frac {1}{a + b/d} (f - b/d \phi_c) $$ 
 
 ### Build instructions
 
