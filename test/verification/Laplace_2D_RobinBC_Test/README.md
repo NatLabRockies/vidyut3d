@@ -13,7 +13,7 @@ The robin BC is implemented as follows:
 
 At the left IB interface, the flux is given by 
 
-$$ d \phi_{i-1/2} / dn$ 
+$$ d \phi_{i-1/2} / dn $$ 
 
 This can be expanded into 
 
