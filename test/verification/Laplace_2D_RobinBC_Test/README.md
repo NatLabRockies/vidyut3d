@@ -62,4 +62,4 @@ https://github.com/AMReX-Codes/amrex/tree/development/Tools/Plotfile
 
 Alternatively, you can just do `mpirun -n 1 ./*.ex inputs2d`
 
-<img src="https://github.com/user-attachments/assets/efd361a2-f2e1-4da5-be2f-9066374d037d" width=500>
+
