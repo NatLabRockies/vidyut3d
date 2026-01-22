@@ -25,12 +25,13 @@ $$ a \phi_{IB} + b \frac{\phi}{n} = f $$
 
 $$ a \phi_{IB} + b \frac{\phi_c - \phi_{IB}}{d} = f $$ 
 
-$$ (a+b/d) \phi_IB + \frac{b}{d} \phi_c = f $$ 
+$$ (a+b/d) \phi_{IB} + \frac{b}{d} \phi_c = f $$ 
 
 $$ \phi_{IB} = \frac {1}{a + b/d} (f - b/d \phi_c) $$ 
 
 This expression for $\phi_{IB}$ is plugged into the fluxes and we solve for the potential. As the flux is 
 implicit, we may need few iterations of the potential solve to converge. This needs to be tested further. 
+The distance $ d $ in here is along the normal direction from the IB to the cell and this has to be transformed back into the Cartesian system to apply the fluxes in the different directions. 
 
 ### Build instructions
 
