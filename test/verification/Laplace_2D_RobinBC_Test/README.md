@@ -29,6 +29,9 @@ $$ (a+b/d) \phi_IB + b/d \frac{\phi_c} = f $$
 
 $$ \phi_{IB} = \frac {1}{a + b/d} (f - b/d \phi_c) $$ 
 
+This expression for $\phi_{IB}$ is plugged into the fluxes and we solve for the potential. As the flux is 
+implicit, we may need few iterations of the potential solve to converge. This needs to be tested further. 
+
 ### Build instructions
 
 make sure $AMREX_HOME is set to your clone of amrex
