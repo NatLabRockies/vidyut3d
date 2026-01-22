@@ -25,7 +25,7 @@ $$ a \phi_{IB} + b \frac{\phi}{n} = f $$
 
 $$ a \phi_{IB} + b \frac{\phi_c - \phi_{IB}}{d} = f $$ 
 
-$$ (a+b/d) \phi_IB + b/d \frac{\phi_c} = f $$ 
+$$ (a+b/d) \phi_IB + \frac{b}{d} \phi_c = f $$ 
 
 $$ \phi_{IB} = \frac {1}{a + b/d} (f - b/d \phi_c) $$ 
 
