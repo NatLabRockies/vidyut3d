@@ -17,17 +17,17 @@ $$ d \phi_{i-1/2} / dn $$
 
 This can be expanded into 
 
-$$ \frac{\phi_{c} - \phi_{IB}}/ d $$ 
+$$ \frac{\phi_{c} - \phi_{IB}}{d} $$ 
 
 The robin boundary condition is given by 
 
-$$ a \phi_{IB} + b \phi_IB = f $$ 
+$$ a \phi_{IB} + b \frac{\phi}{n} = f $$ 
 
-$$ a \phi_{IB} + b \frac{\phi_c - \phi_{IB}}/ d = f $$ 
+$$ a \phi_{IB} + b \frac{\phi_c - \phi_{IB}}{d} = f $$ 
 
 $$ (a+b/d) \phi_IB + b/d \frac{\phi_c} = f $$ 
 
-$$ \phi_IB = \frac {1}{a + b/d} (f - b/d \phi_c) $$ 
+$$ \phi_{IB} = \frac {1}{a + b/d} (f - b/d \phi_c) $$ 
 
 ### Build instructions
 
