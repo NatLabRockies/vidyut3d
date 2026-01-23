@@ -13,7 +13,7 @@ The robin BC is implemented as follows:
 
 At the left IB interface, the flux is given by 
 
-$$ \frac{d\phi}{dn}\right|_{i-1/2} = \frac{\phi_{c} - \phi_{IB}}{dx_i} $$ 
+$$ \frac{d\phi}{dn}|_{i-1/2} = \frac{\phi_{c} - \phi_{IB}}{dx_i} $$ 
 
 The generic boundary condition iin each direction is given by 
 
