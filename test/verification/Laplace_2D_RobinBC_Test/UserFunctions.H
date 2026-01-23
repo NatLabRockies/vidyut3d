@@ -223,64 +223,59 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     {
         if (0.5 * (prob_parm.inner_radius + prob_parm.outer_radius) < rad)
         {
-            if (prob_parm.outer_dirichlet)
-            {
-                amrex::Real phi_dirc = prob_parm.outer_voltage;
+            amrex::Real phi_dirc = prob_parm.outer_voltage;
+            amrex::Real dphidr =
+                (prob_parm.outer_voltage - prob_parm.inner_voltage) /
+                std::log(prob_parm.outer_radius / prob_parm.inner_radius) / rad;
+            amrex::Real dphidn = dphidr * std::fabs(xloc[dir]) / rad;
+            amrex::Real bc_value = prob_parm.a_outer_dir * phi_dirc +
+                                   prob_parm.b_outer_neumann * dphidn;
+            amrex::Real ccibvec[AMREX_SPACEDIM];
+            ccibvec[0] = prob_lo[0] + (intcell[0] + 0.5) * dx[0] - xib[0];
+            ccibvec[1] = prob_lo[1] + (intcell[1] + 0.5) * dx[1] - xib[1];
 
-                amrex::Real ccibvec[AMREX_SPACEDIM];
-                ccibvec[0] = prob_lo[0] + (intcell[0] + 0.5) * dx[0] - xib[0];
-                ccibvec[1] = prob_lo[1] + (intcell[1] + 0.5) * dx[1] - xib[1];
-
-                amrex::Real d_ccib2 =
-                    ccibvec[0] * ccibvec[0] + ccibvec[1] * ccibvec[1];
-                amrex::Real d_ccib_sqrt = std::sqrt(d_ccib2);
-                //acoeff(intcell) += (1.0 / d_ccib2) * ccibvec[dir] *
-                //                   outward_normal[dir] / dx[dir];
-                amrex::Real coeff_term = 1/d_ccib2 * (1 + prob_parm.b_outer_neumann/(d_ccib_sqrt*(prob_parm.a_outer_dir - prob_parm.b_outer_neumann/d_ccib_sqrt)));
-                acoeff(intcell) += coeff_term * ccibvec[dir] *
-                                   outward_normal[dir] / dx[dir];                                  
-                rhs(intcell, rhs_comp) += (phi_dirc / d_ccib2) * ccibvec[dir] *
-                                          outward_normal[dir] / dx[dir]* 1.0/(prob_parm.a_outer_dir - prob_parm.b_outer_neumann/d_ccib_sqrt);
-            } else
-            {
-                amrex::Real dphidr =
-                    (prob_parm.outer_voltage - prob_parm.inner_voltage) /
-                    std::log(prob_parm.outer_radius / prob_parm.inner_radius) /
-                    prob_parm.outer_radius;
-                amrex::Real dphidn =
-                    dphidr * std::fabs(xloc[dir]) / prob_parm.outer_radius;
-                rhs(intcell, rhs_comp) -= dphidn / dx[dir];
-            }
+            amrex::Real d_ccib2 =
+                ccibvec[0] * ccibvec[0] + ccibvec[1] * ccibvec[1];
+            amrex::Real d_ccib_sqrt = std::sqrt(d_ccib2);
+            const amrex::Real alpha =
+                ccibvec[dir] / d_ccib2 * outward_normal[dir];
+            acoeff(intcell) += alpha / dx[dir] *
+                               (1 + prob_parm.b_outer_neumann * alpha /
+                                        (prob_parm.a_outer_dir -
+                                         prob_parm.b_outer_neumann * alpha));
+            rhs(intcell, rhs_comp) +=
+                bc_value * alpha / dx[dir] * 1.0 /
+                (prob_parm.a_outer_dir - prob_parm.b_outer_neumann * alpha);
+            amrex::Print() << " Applying outer Dirichlet BC at cell " << alpha
+                           << " with bc_value = " << bc_value
+                           << " and a_outer_dir = " << prob_parm.a_outer_dir
+                           << " and b_outer_neumann = "
+                           << prob_parm.b_outer_neumann << "\n";
         } else
         {
-            if (prob_parm.inner_dirichlet)
-            {
-                amrex::Real phi_dirc = prob_parm.inner_voltage;
+            amrex::Real phi_dirc = prob_parm.inner_voltage;
+            amrex::Real ccibvec[AMREX_SPACEDIM];
+            ccibvec[0] = prob_lo[0] + (intcell[0] + 0.5) * dx[0] - xib[0];
+            ccibvec[1] = prob_lo[1] + (intcell[1] + 0.5) * dx[1] - xib[1];
 
-                amrex::Real ccibvec[AMREX_SPACEDIM];
-                ccibvec[0] = prob_lo[0] + (intcell[0] + 0.5) * dx[0] - xib[0];
-                ccibvec[1] = prob_lo[1] + (intcell[1] + 0.5) * dx[1] - xib[1];
-
-                amrex::Real d_ccib2 =
-                    ccibvec[0] * ccibvec[0] + ccibvec[1] * ccibvec[1];
-                amrex::Real d_ccib_sqrt = std::sqrt(d_ccib2);
-                //acoeff(intcell) += (1.0 / d_ccib2) * ccibvec[dir] *
-                //                   outward_normal[dir] / dx[dir];
-                amrex::Real coeff_term = 1/d_ccib2 * (1 + prob_parm.b_inner_neumann/(d_ccib_sqrt*(prob_parm.a_inner_dir - prob_parm.b_inner_neumann/d_ccib_sqrt)));
-                acoeff(intcell) += coeff_term * ccibvec[dir] *
-                                   outward_normal[dir] / dx[dir];
-                rhs(intcell, rhs_comp) +=  (phi_dirc / d_ccib2) * ccibvec[dir] *
-                                          outward_normal[dir] / dx[dir]* 1.0/(prob_parm.a_inner_dir - prob_parm.b_inner_neumann/d_ccib_sqrt);
-            } else
-            {
-                amrex::Real dphidr =
-                    (prob_parm.outer_voltage - prob_parm.inner_voltage) /
-                    std::log(prob_parm.outer_radius / prob_parm.inner_radius) /
-                    prob_parm.inner_radius;
-                amrex::Real dphidn =
-                    -dphidr * std::fabs(xloc[dir]) / prob_parm.inner_radius;
-                rhs(intcell, rhs_comp) -= dphidn / dx[dir];
-            }
+            amrex::Real d_ccib2 =
+                ccibvec[0] * ccibvec[0] + ccibvec[1] * ccibvec[1];
+            amrex::Real d_ccib_sqrt = std::sqrt(d_ccib2);
+            amrex::Real dphidr =
+                (prob_parm.outer_voltage - prob_parm.inner_voltage) /
+                std::log(prob_parm.outer_radius / prob_parm.inner_radius) / rad;
+            amrex::Real dphidn = -dphidr * std::fabs(xloc[dir]) / rad;
+            amrex::Real bc_value = prob_parm.a_inner_dir * phi_dirc +
+                                   prob_parm.b_inner_neumann * dphidn;
+            const amrex::Real alpha =
+                ccibvec[dir] / d_ccib2 * outward_normal[dir];
+            acoeff(intcell) += alpha / dx[dir] *
+                               (1 + prob_parm.b_inner_neumann * alpha /
+                                        (prob_parm.a_inner_dir -
+                                         prob_parm.b_inner_neumann * alpha));
+            rhs(intcell, rhs_comp) +=
+                bc_value * alpha / dx[dir] * 1.0 /
+                (prob_parm.a_inner_dir - prob_parm.b_inner_neumann * alpha);
         }
     } else
     {
