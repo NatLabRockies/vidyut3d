@@ -13,25 +13,13 @@ The robin BC is implemented as follows:
 
 At the left IB interface, the flux is given by 
 
-$$ d\phi_{i-1/2} / dn $$ 
+$$ \frac{d\phi}{dn}\right|_{i-1/2} = \frac{\phi_{c} - \phi_{IB}}{dx_i} $$ 
 
-This can be expanded into 
+The generic boundary condition iin each direction is given by 
 
-$$ \frac{\phi_{c} - \phi_{IB}}{d} $$ 
+$$ a \phi_{IB} + b \frac{\phi_c - \phi_{IB}}{d}\frac{d_i}{d} = f_i $$ 
 
-The robin boundary condition is given by 
-
-$$ a \phi_{IB} + b \frac{d\phi}{dn} = f $$ 
-
-$$ a \phi_{IB} + b \frac{\phi_c - \phi_{IB}}{d} = f $$ 
-
-$$ (a+b/d) \phi_{IB} + \frac{b}{d} \phi_c = f $$ 
-
-$$ \phi_{IB} = \frac {1}{a + b/d} (f - b/d \phi_c) $$ 
-
-This expression for $\phi_{IB}$ is plugged into the fluxes and we solve for the potential. As the flux is 
-implicit, we may need few iterations of the potential solve to converge. This needs to be tested further. 
-The distance $d$ in here is along the normal direction from the IB to the cell and this has to be transformed back into the Cartesian system to apply the fluxes in the different directions. 
+This expression for $\phi_{IB}$ is plugged into the fluxes and we solve for the potential. The method is first-order accurate. 
 
 ### Build instructions
 
