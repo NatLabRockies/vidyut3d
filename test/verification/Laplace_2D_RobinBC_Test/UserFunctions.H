@@ -6,6 +6,9 @@
 #include <AMReX_REAL.H>
 #include <Chemistry.H>
 
+
+
+
 using namespace amrex;
 namespace user_transport {
 AMREX_GPU_DEVICE AMREX_INLINE amrex::Real current_collector_value(
@@ -204,7 +207,7 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     xloc[0] = prob_lo[0] + (lcell[0] + 0.5) * dx[0];
     xloc[1] = prob_lo[1] + (lcell[1] + 0.5) * dx[1];
     xloc[dir] += 0.5 * dx[dir];
-    amrex::Real rad = sqrt(xloc[0] * xloc[0] + xloc[1] * xloc[1]);
+    //amrex::Real rad = sqrt(xloc[0] * xloc[0] + xloc[1] * xloc[1]);
 
     // interior cell
     IntVect intcell = (sgn == 1) ? lcell : rcell;
@@ -215,10 +218,9 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
 
     get_surface_point(
         cutcell, prob_lo, prob_hi, domlo, domhi, dx, prob_parm, xib);
-
+    amrex::Real rad = sqrt(xib[0] * xib[0] + xib[1] * xib[1]);
     amrex::Real ndens = 0.0;
     for (int sp = 0; sp < NUM_SPECIES; sp++) ndens += sb_arr(intcell, sp);
-
     if (solved_comp == POT_ID)
     {
         if (0.5 * (prob_parm.inner_radius + prob_parm.outer_radius) < rad)
@@ -227,18 +229,16 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
             amrex::Real dphidr =
                 (prob_parm.outer_voltage - prob_parm.inner_voltage) /
                 std::log(prob_parm.outer_radius / prob_parm.inner_radius) / rad;
-            amrex::Real dphidn = dphidr * std::fabs(xloc[dir]) / rad;
+            amrex::Real dphidn = dphidr * std::fabs(xib[dir]) / rad;
             amrex::Real bc_value = prob_parm.a_outer_dir * phi_dirc +
                                    prob_parm.b_outer_neumann * dphidn;
             amrex::Real ccibvec[AMREX_SPACEDIM];
             ccibvec[0] = prob_lo[0] + (intcell[0] + 0.5) * dx[0] - xib[0];
             ccibvec[1] = prob_lo[1] + (intcell[1] + 0.5) * dx[1] - xib[1];
-
             amrex::Real d_ccib2 =
                 ccibvec[0] * ccibvec[0] + ccibvec[1] * ccibvec[1];
             amrex::Real d_ccib_sqrt = std::sqrt(d_ccib2);
-            const amrex::Real alpha =
-                ccibvec[dir] / d_ccib2 * outward_normal[dir];
+            const amrex::Real alpha = ccibvec[dir] / d_ccib2 * outward_normal[dir];
             acoeff(intcell) += alpha / dx[dir] *
                                (1 + prob_parm.b_outer_neumann * alpha /
                                         (prob_parm.a_outer_dir -
@@ -246,11 +246,11 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
             rhs(intcell, rhs_comp) +=
                 bc_value * alpha / dx[dir] * 1.0 /
                 (prob_parm.a_outer_dir - prob_parm.b_outer_neumann * alpha);
-            amrex::Print() << " Applying outer Dirichlet BC at cell " << alpha
+            /*amrex::Print() << " Applying outer Dirichlet BC at cell " << alpha
                            << " with bc_value = " << bc_value
                            << " and a_outer_dir = " << prob_parm.a_outer_dir
                            << " and b_outer_neumann = "
-                           << prob_parm.b_outer_neumann << "\n";
+                           << prob_parm.b_outer_neumann << "\n";*/
         } else
         {
             amrex::Real phi_dirc = prob_parm.inner_voltage;
@@ -264,11 +264,10 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
             amrex::Real dphidr =
                 (prob_parm.outer_voltage - prob_parm.inner_voltage) /
                 std::log(prob_parm.outer_radius / prob_parm.inner_radius) / rad;
-            amrex::Real dphidn = -dphidr * std::fabs(xloc[dir]) / rad;
+            amrex::Real dphidn = -dphidr * std::fabs(xib[dir]) / rad;
             amrex::Real bc_value = prob_parm.a_inner_dir * phi_dirc +
                                    prob_parm.b_inner_neumann * dphidn;
-            const amrex::Real alpha =
-                ccibvec[dir] / d_ccib2 * outward_normal[dir];
+            const amrex::Real alpha = ccibvec[dir] / d_ccib2 * outward_normal[dir];
             acoeff(intcell) += alpha / dx[dir] *
                                (1 + prob_parm.b_inner_neumann * alpha /
                                         (prob_parm.a_inner_dir -
