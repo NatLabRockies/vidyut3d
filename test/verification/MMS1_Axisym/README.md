@@ -1,4 +1,4 @@
-# Method-of-Manufactured solutions (MMS) test 1
+# Method-of-Manufactured solutions (MMS) Axisymmetric
 
 This case solves a coupled system that includes the species-Poisson numerical 
 coupling in the plasma fluid model (in axi-symmetric coordinates)
