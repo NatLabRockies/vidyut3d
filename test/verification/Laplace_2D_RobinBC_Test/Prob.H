@@ -29,8 +29,8 @@ void amrex_probinit(ProbParm& h_prob_parm, ProbParm& d_prob_parm)
     pp.query("b_outer_neumann", h_prob_parm.b_outer_neumann);
     AMREX_ALWAYS_ASSERT(!(
         h_prob_parm.inner_dirichlet == 0 && h_prob_parm.outer_dirichlet == 0));
-    //AMREX_ALWAYS_ASSERT((
-    //    h_prob_parm.a_inner_dir == 1.0 || h_prob_parm.a_outer_dir == 1.0));
+    // AMREX_ALWAYS_ASSERT((
+    //     h_prob_parm.a_inner_dir == 1.0 || h_prob_parm.a_outer_dir == 1.0));
 
 #ifdef AMREX_USE_GPU
     amrex::Gpu::htod_memcpy(&d_prob_parm, &h_prob_parm, sizeof(ProbParm));

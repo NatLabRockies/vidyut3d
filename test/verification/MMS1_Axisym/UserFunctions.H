@@ -7,8 +7,6 @@
 #include <Chemistry.H>
 #include <VarDefines.H>
 
-
-
 using namespace amrex;
 namespace user_transport {
 AMREX_GPU_DEVICE AMREX_INLINE amrex::Real current_collector_value(
@@ -207,7 +205,7 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     xloc[0] = prob_lo[0] + (lcell[0] + 0.5) * dx[0];
     xloc[1] = prob_lo[1] + (lcell[1] + 0.5) * dx[1];
     xloc[dir] += 0.5 * dx[dir];
-    //amrex::Real rad = sqrt(xloc[0] * xloc[0] + xloc[1] * xloc[1]);
+    // amrex::Real rad = sqrt(xloc[0] * xloc[0] + xloc[1] * xloc[1]);
 
     // interior cell
     IntVect intcell = (sgn == 1) ? lcell : rcell;
@@ -221,13 +219,14 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     amrex::Real rad = sqrt(xib[0] * xib[0] + xib[1] * xib[1]);
     amrex::Real ndens = 0.0;
     for (int sp = 0; sp < NUM_SPECIES; sp++) ndens += sb_arr(intcell, sp);
-    //amrex::Print()<<intcell<<std::endl;
+    // amrex::Print()<<intcell<<std::endl;
     if (solved_comp == POT_ID)
     {
         if (0.5 * (prob_parm.inner_radius + prob_parm.outer_radius) < rad)
         {
             amrex::Real phi_dirc = rad * rad * rad * rad;
-            amrex::Real dphidn = 4 * rad * rad * rad * std::fabs(xib[dir]) / rad;
+            amrex::Real dphidn =
+                4 * rad * rad * rad * std::fabs(xib[dir]) / rad;
             amrex::Real bc_value = prob_parm.a_outer_dir * phi_dirc +
                                    prob_parm.b_outer_neumann * dphidn;
             amrex::Real ccibvec[AMREX_SPACEDIM];
@@ -236,7 +235,8 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
             amrex::Real d_ccib2 =
                 ccibvec[0] * ccibvec[0] + ccibvec[1] * ccibvec[1];
             amrex::Real d_ccib_sqrt = std::sqrt(d_ccib2);
-            const amrex::Real alpha = ccibvec[dir] / d_ccib2 * outward_normal[dir];
+            const amrex::Real alpha =
+                ccibvec[dir] / d_ccib2 * outward_normal[dir];
             acoeff(intcell) += alpha / dx[dir] *
                                (1 + prob_parm.b_outer_neumann * alpha /
                                         (prob_parm.a_outer_dir -
@@ -254,7 +254,8 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
         } else
         {
             amrex::Real phi_dirc = rad * rad * rad * rad;
-            amrex::Real dphidn = - 4 * rad * rad * rad * std::fabs(xib[dir]) / rad;
+            amrex::Real dphidn =
+                -4 * rad * rad * rad * std::fabs(xib[dir]) / rad;
             amrex::Real bc_value = prob_parm.a_outer_dir * phi_dirc +
                                    prob_parm.b_outer_neumann * dphidn;
             amrex::Real ccibvec[AMREX_SPACEDIM];
@@ -263,7 +264,8 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
             amrex::Real d_ccib2 =
                 ccibvec[0] * ccibvec[0] + ccibvec[1] * ccibvec[1];
             amrex::Real d_ccib_sqrt = std::sqrt(d_ccib2);
-            const amrex::Real alpha = ccibvec[dir] / d_ccib2 * outward_normal[dir];
+            const amrex::Real alpha =
+                ccibvec[dir] / d_ccib2 * outward_normal[dir];
             acoeff(intcell) += alpha / dx[dir] *
                                (1 + prob_parm.b_outer_neumann * alpha /
                                         (prob_parm.a_outer_dir -
@@ -272,41 +274,43 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
                 bc_value * alpha / dx[dir] * 1.0 /
                 (prob_parm.a_outer_dir - prob_parm.b_outer_neumann * alpha);
             /*acoeff(intcell) += alpha / dx[dir] ;
-            rhs(intcell, rhs_comp) += bc_value * alpha / dx[dir]*/ ;
+            rhs(intcell, rhs_comp) += bc_value * alpha / dx[dir]*/
+            ;
         }
     } else if (solved_comp == NI_ID)
     {
-            amrex::Real ndens = 0.0;
-            for (int sp = 0; sp < NUM_SPECIES; sp++) ndens += sb_arr(intcell, sp);
-            amrex::Real emag = std::sqrt(
+        amrex::Real ndens = 0.0;
+        for (int sp = 0; sp < NUM_SPECIES; sp++) ndens += sb_arr(intcell, sp);
+        amrex::Real emag = std::sqrt(
             amrex::Math::powi<2>(sb_arr(intcell, EFX_ID)) +
             amrex::Math::powi<2>(sb_arr(intcell, EFY_ID)) +
             amrex::Math::powi<2>(sb_arr(intcell, EFZ_ID)));
-            amrex::Real Dcoeff = specDiff(solved_comp, sb_arr(intcell, ETEMP_ID), ndens, emag, Tg);
-            amrex::Real ccibvec[AMREX_SPACEDIM];
-            ccibvec[0] = prob_lo[0] + (intcell[0] + 0.5) * dx[0] - xib[0];
-            ccibvec[1] = prob_lo[1] + (intcell[1] + 0.5) * dx[1] - xib[1];
-            amrex::Real d_ccib2 =
-                ccibvec[0] * ccibvec[0] + ccibvec[1] * ccibvec[1];
-            amrex::Real d_ccib_sqrt = std::sqrt(d_ccib2);
-            const amrex::Real alpha = ccibvec[dir] / d_ccib2 * outward_normal[dir];
-            acoeff(intcell) -= Dcoeff / dx[dir] * alpha;
-            rhs(intcell, rhs_comp) -= 16 * Dcoeff/dx[dir] * rad * rad * alpha;
-            amrex::Real mu = specMob(solved_comp, sb_arr(intcell, ETEMP_ID), ndens, emag, Tg);
-            amrex::Real vel = mu * sb_arr(intcell, EFX_ID + dir);
-            amrex::Real flux=0.0;
-             if(sb_arr(rcell, CMASK_ID)<1)
-             {
-                flux=(vel>0)? sb_arr(intcell, solved_comp): 16 * rad * rad;
-                rhs(intcell, rhs_comp) -= flux * vel /dx[dir];
-             }
-             else
-             {
-                flux=(vel>0)? 16 * rad * rad:sb_arr(intcell, solved_comp);
-                rhs(intcell, rhs_comp) += flux * vel /dx[dir];
-             }
+        amrex::Real Dcoeff =
+            specDiff(solved_comp, sb_arr(intcell, ETEMP_ID), ndens, emag, Tg);
+        amrex::Real ccibvec[AMREX_SPACEDIM];
+        ccibvec[0] = prob_lo[0] + (intcell[0] + 0.5) * dx[0] - xib[0];
+        ccibvec[1] = prob_lo[1] + (intcell[1] + 0.5) * dx[1] - xib[1];
+        amrex::Real d_ccib2 = ccibvec[0] * ccibvec[0] + ccibvec[1] * ccibvec[1];
+        amrex::Real d_ccib_sqrt = std::sqrt(d_ccib2);
+        const amrex::Real alpha = ccibvec[dir] / d_ccib2 * outward_normal[dir];
+        acoeff(intcell) -= Dcoeff / dx[dir] * alpha;
+        rhs(intcell, rhs_comp) -= 16 * Dcoeff / dx[dir] * rad * rad * alpha;
+        amrex::Real mu =
+            specMob(solved_comp, sb_arr(intcell, ETEMP_ID), ndens, emag, Tg);
+        amrex::Real vel = mu * sb_arr(intcell, EFX_ID + dir);
+        amrex::Real flux = 0.0;
+        if (sb_arr(rcell, CMASK_ID) < 1)
+        {
+            flux = (vel > 0) ? sb_arr(intcell, solved_comp) : 16 * rad * rad;
+            rhs(intcell, rhs_comp) -= flux * vel / dx[dir];
+        } else
+        {
+            flux = (vel > 0) ? 16 * rad * rad : sb_arr(intcell, solved_comp);
+            rhs(intcell, rhs_comp) += flux * vel / dx[dir];
+        }
+    } else
+    {
     }
-    else{ } 
 }
 
 AMREX_GPU_HOST_DEVICE
@@ -408,7 +412,7 @@ AMREX_GPU_DEVICE AMREX_INLINE amrex::Real compute_vel(
     amrex::Real Pg)
 {
     amrex::Real vel = 0.0;
-    if  (specid == NI_ID)
+    if (specid == NI_ID)
     {
         amrex::Real efieldmag = std::sqrt(
             amrex::Math::powi<2>(phi(cellid, EFX_ID)) +

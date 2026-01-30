@@ -6,9 +6,6 @@
 #include <AMReX_REAL.H>
 #include <Chemistry.H>
 
-
-
-
 using namespace amrex;
 namespace user_transport {
 AMREX_GPU_DEVICE AMREX_INLINE amrex::Real current_collector_value(
@@ -207,7 +204,7 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     xloc[0] = prob_lo[0] + (lcell[0] + 0.5) * dx[0];
     xloc[1] = prob_lo[1] + (lcell[1] + 0.5) * dx[1];
     xloc[dir] += 0.5 * dx[dir];
-    //amrex::Real rad = sqrt(xloc[0] * xloc[0] + xloc[1] * xloc[1]);
+    // amrex::Real rad = sqrt(xloc[0] * xloc[0] + xloc[1] * xloc[1]);
 
     // interior cell
     IntVect intcell = (sgn == 1) ? lcell : rcell;
@@ -238,7 +235,8 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
             amrex::Real d_ccib2 =
                 ccibvec[0] * ccibvec[0] + ccibvec[1] * ccibvec[1];
             amrex::Real d_ccib_sqrt = std::sqrt(d_ccib2);
-            const amrex::Real alpha = ccibvec[dir] / d_ccib2 * outward_normal[dir];
+            const amrex::Real alpha =
+                ccibvec[dir] / d_ccib2 * outward_normal[dir];
             acoeff(intcell) += alpha / dx[dir] *
                                (1 + prob_parm.b_outer_neumann * alpha /
                                         (prob_parm.a_outer_dir -
@@ -267,7 +265,8 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
             amrex::Real dphidn = -dphidr * std::fabs(xib[dir]) / rad;
             amrex::Real bc_value = prob_parm.a_inner_dir * phi_dirc +
                                    prob_parm.b_inner_neumann * dphidn;
-            const amrex::Real alpha = ccibvec[dir] / d_ccib2 * outward_normal[dir];
+            const amrex::Real alpha =
+                ccibvec[dir] / d_ccib2 * outward_normal[dir];
             acoeff(intcell) += alpha / dx[dir] *
                                (1 + prob_parm.b_inner_neumann * alpha /
                                         (prob_parm.a_inner_dir -
