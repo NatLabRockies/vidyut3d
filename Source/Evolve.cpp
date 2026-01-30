@@ -235,7 +235,7 @@ void Vidyut::Evolve()
                 photoion_src[lev].setVal(0.0);
                 photoion_src_total[lev].setVal(0.0);
             }
-            
+
             // add dt/2 after niter=0
             solve_potential(
                 cur_time + time_offset, Sborder, pot_bc_lo, pot_bc_hi,
