@@ -9,7 +9,7 @@ $$\mu=-1 \quad D=1 \quad E=-\frac{d\phi}{dx}-\frac{d\phi}{dx}$$
 
 The exact solution to the solved system is:
 
-$$n=16r^2 \quad \phi=r^4 \quad r=\sqrt{x^2+y^2} \quad F(r)= - \left(384\mu+64D\right)$$
+$$n=16r^2 \quad \phi=r^4 \quad r=\sqrt{x^2+y^2} \quad F(r)= - \left(384\mu r^4+64D\right)$$
 
 ### Build instructions
 
