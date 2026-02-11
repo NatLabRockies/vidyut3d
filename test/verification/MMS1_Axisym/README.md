@@ -5,7 +5,7 @@ coupling in the plasma fluid model (in axi-symmetric coordinates)
 
 $$\frac{dn}{dt}+\frac{d (\mu n E)}{dx}+\frac{d (\mu n E)}{dy}=\frac{d}{dx}\left(D\frac{dn}{dx}\right) + \frac{d}{dy}\left(D\frac{dn}{dy}\right) + F(r) $$
 $$\frac{d^2\phi}{dx^2}+\frac{d^2\phi}{dy^2}=n $$
-$$\mu=-1 \quad D=1 \quad E=-\frac{d\phi}{dx}-\frac{d\phi}{dx}$$
+$$\mu=-1 \quad D=1 \quad E=-\nabla\phi$$
 
 The exact solution to the solved system is:
 
