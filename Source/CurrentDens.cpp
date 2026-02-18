@@ -14,6 +14,50 @@
 #include <compute_explicit_flux.H>
 #include <AMReX_MLABecLaplacian.H>
 
+void Vidyut::compute_disp_current_den(amrex::Real time, amrex::Real tstep)
+{
+    amrex::Real dt=tstep;
+    amrex::Real curtime=time;
+    for (int lev = 0; lev <= finest_level; lev++)
+    {
+        const auto dx = geom[lev].CellSizeArray();
+        auto prob_lo = geom[lev].ProbLoArray();
+        auto prob_hi = geom[lev].ProbHiArray();
+        const Box& domain = geom[lev].Domain();
+        const int* domlo_arr = geom[lev].Domain().loVect();
+        const int* domhi_arr = geom[lev].Domain().hiVect();
+
+        GpuArray<int, AMREX_SPACEDIM> domlo = {
+            AMREX_D_DECL(domlo_arr[0], domlo_arr[1], domlo_arr[2])};
+        GpuArray<int, AMREX_SPACEDIM> domhi = {
+            AMREX_D_DECL(domhi_arr[0], domhi_arr[1], domhi_arr[2])};
+
+        for (MFIter mfi(phi_new[lev], TilingIfNotGPU()); mfi.isValid(); ++mfi)
+        {
+            const Box& bx = mfi.tilebox();
+            Array4<Real> phinew_arr = phi_new[lev].array(mfi);
+            Array4<Real> phiold_arr = phi_old[lev].array(mfi);
+
+            amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
+                if (phinew_arr(i, j, k, CMASK_ID) == 1.0 && curtime > 0.0)
+                {
+                    for(int d=0;d<AMREX_SPACEDIM;d++)
+                    {
+                        phinew_arr(i,j,k,DCURX_ID+d)=EPS0*(phinew_arr(i,j,k,EFX_ID+d)-phiold_arr(i,j,k,EFX_ID+d))/dt;
+                    }
+                }
+                else
+                {
+                    for(int d=0;d<AMREX_SPACEDIM;d++)
+                    {
+                        phinew_arr(i,j,k,DCURX_ID+d)=0.0;
+                    }
+                }
+            });
+        }
+    }
+}
+
 void Vidyut::compute_current_den(Vector<MultiFab>& Sborder)
 {
     BL_PROFILE("Vidyut::compute_cur_den()");
@@ -303,7 +347,8 @@ void Vidyut::compute_integrated_currents()
         int surfloc = current_loc_surfaces[locs];
         amrex::Real outward_normal = (surfloc % 2 == 0) ? -1.0 : 1.0;
         int dir = int(surfloc / 2);
-        amrex::Real current = 0.0;
+        amrex::Real condcurrent = 0.0;
+        amrex::Real dispcurrent = 0.0;
         amrex::Real surfarea = 0.0;
         for (int lev = 0; lev <= finest_level; lev++)
         {
@@ -338,7 +383,7 @@ void Vidyut::compute_integrated_currents()
                 level_mask.setVal(1);
             }
 
-            current += amrex::ReduceSum(
+            condcurrent += amrex::ReduceSum(
                 phi_new[lev], level_mask, 0,
                 [=] AMREX_GPU_HOST_DEVICE(
                     Box const& bx, Array4<Real const> const& fab,
@@ -351,6 +396,26 @@ void Vidyut::compute_integrated_currents()
                             si_part += cellarea * outward_normal *
                                        (fab(cellid, ECURX_ID + dir) +
                                         fab(cellid, ICURX_ID + dir)) *
+                                       mask_arr(cellid) *
+                                       user_transport::current_collector_value(
+                                           cellid, locs, surfloc, problo,
+                                           probhi, domlo, domhi, dx);
+                        });
+                    return si_part;
+                });
+            
+            dispcurrent += amrex::ReduceSum(
+                phi_new[lev], level_mask, 0,
+                [=] AMREX_GPU_HOST_DEVICE(
+                    Box const& bx, Array4<Real const> const& fab,
+                    Array4<int const> const& mask_arr) -> Real {
+                    // surface integral part
+                    Real si_part = 0.0;
+                    amrex::Loop(
+                        bx, [=, &si_part](int i, int j, int k) noexcept {
+                            IntVect cellid(AMREX_D_DECL(i, j, k));
+                            si_part += cellarea * outward_normal *
+                                       fab(cellid, DCURX_ID + dir) *
                                        mask_arr(cellid) *
                                        user_transport::current_collector_value(
                                            cellid, locs, surfloc, problo,
@@ -378,9 +443,11 @@ void Vidyut::compute_integrated_currents()
                 });
         }
 
-        ParallelAllReduce::Sum(current, ParallelContext::CommunicatorSub());
+        ParallelAllReduce::Sum(condcurrent, ParallelContext::CommunicatorSub());
+        ParallelAllReduce::Sum(dispcurrent, ParallelContext::CommunicatorSub());
         ParallelAllReduce::Sum(surfarea, ParallelContext::CommunicatorSub());
-        integrated_currents[locs] = current;
+        integrated_conduction_currents[locs] = condcurrent;
+        integrated_displacement_currents[locs] = dispcurrent;
         integrated_current_areas[locs] = surfarea;
     }
 }

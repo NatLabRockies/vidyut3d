@@ -48,7 +48,13 @@ void Vidyut::Evolve()
         for (int locs = 0; locs < ncurrent_locs; locs++)
         {
             PrintToFile(intcurrentfilename)
-                << "current_surface_" << locs << current_loc_surfaces[locs]
+                << "conduction_current_surface_" << locs << current_loc_surfaces[locs]
+                << "\t";
+        }
+        for (int locs = 0; locs < ncurrent_locs; locs++)
+        {
+            PrintToFile(intcurrentfilename)
+                << "displacement_current_surface_" << locs << current_loc_surfaces[locs]
                 << "\t";
         }
         for (int locs = 0; locs < ncurrent_locs; locs++)
@@ -123,7 +129,7 @@ void Vidyut::Evolve()
             {
                 amrex::Print()
                     << "[Level " << lev << " step " << istep[lev] + 1 << "] ";
-                amrex::Print() << "ADVANCE with time = " << t_new[lev]
+                amrex::Print() << "ADVANCING with time = " << t_new[lev]
                                << " dt = " << dt[0] << std::endl;
             }
         }
@@ -552,6 +558,7 @@ void Vidyut::Evolve()
                         Sborder[lev].nComp());
                 }
                 compute_current_den(Sborder);
+                compute_disp_current_den(cur_time,dt_common);
 
                 if (track_integrated_currents)
                 {
@@ -653,7 +660,12 @@ void Vidyut::Evolve()
                 for (int locs = 0; locs < ncurrent_locs; locs++)
                 {
                     PrintToFile(intcurrentfilename)
-                        << integrated_currents[locs] << "\t";
+                        << integrated_conduction_currents[locs] << "\t";
+                }
+                for (int locs = 0; locs < ncurrent_locs; locs++)
+                {
+                    PrintToFile(intcurrentfilename)
+                        << integrated_displacement_currents[locs] << "\t";
                 }
                 for (int locs = 0; locs < ncurrent_locs; locs++)
                 {
@@ -685,12 +697,17 @@ void Vidyut::Evolve()
             for (int locs = 0; locs < ncurrent_locs; locs++)
             {
                 PrintToFile(intcurrentfilename)
-                    << integrated_currents[locs] << "\t";
+                << integrated_conduction_currents[locs] << "\t";
             }
             for (int locs = 0; locs < ncurrent_locs; locs++)
             {
                 PrintToFile(intcurrentfilename)
-                    << integrated_current_areas[locs] << "\t";
+                << integrated_displacement_currents[locs] << "\t";
+            }
+            for (int locs = 0; locs < ncurrent_locs; locs++)
+            {
+                PrintToFile(intcurrentfilename)
+                << integrated_current_areas[locs] << "\t";
             }
             PrintToFile(intcurrentfilename) << "\n";
         }
