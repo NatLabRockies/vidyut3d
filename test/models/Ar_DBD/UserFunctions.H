@@ -18,7 +18,27 @@ AMREX_GPU_DEVICE AMREX_INLINE amrex::Real current_collector_value(
     GpuArray<int, AMREX_SPACEDIM> domhi,
     GpuArray<Real, AMREX_SPACEDIM> dx)
 {
-    return (0.0);
+    int dir = int(surfaceloc / 2);
+    int sign = (surfaceloc % 2 == 0) ? -1 : 1;
+    amrex::Real value = 0.0;
+
+    if (sign == -1)
+    {
+        if (cellid[dir] == domlo[dir])
+        {
+            value = 1.0;
+        }
+    }
+
+    if (sign == 1)
+    {
+        if (cellid[dir] == domhi[dir])
+        {
+            value = 1.0;
+        }
+    }
+    
+    return (value);
 }
 
 AMREX_GPU_DEVICE AMREX_INLINE void get_photoion_acoeff(
