@@ -48,14 +48,14 @@ void Vidyut::Evolve()
         for (int locs = 0; locs < ncurrent_locs; locs++)
         {
             PrintToFile(intcurrentfilename)
-                << "conduction_current_surface_" << locs << current_loc_surfaces[locs]
-                << "\t";
+                << "conduction_current_surface_" << locs
+                << current_loc_surfaces[locs] << "\t";
         }
         for (int locs = 0; locs < ncurrent_locs; locs++)
         {
             PrintToFile(intcurrentfilename)
-                << "displacement_current_surface_" << locs << current_loc_surfaces[locs]
-                << "\t";
+                << "displacement_current_surface_" << locs
+                << current_loc_surfaces[locs] << "\t";
         }
         for (int locs = 0; locs < ncurrent_locs; locs++)
         {
@@ -558,7 +558,7 @@ void Vidyut::Evolve()
                         Sborder[lev].nComp());
                 }
                 compute_current_den(Sborder);
-                compute_disp_current_den(cur_time,dt_common);
+                compute_disp_current_den(cur_time, dt_common);
 
                 if (track_integrated_currents)
                 {
@@ -697,17 +697,17 @@ void Vidyut::Evolve()
             for (int locs = 0; locs < ncurrent_locs; locs++)
             {
                 PrintToFile(intcurrentfilename)
-                << integrated_conduction_currents[locs] << "\t";
+                    << integrated_conduction_currents[locs] << "\t";
             }
             for (int locs = 0; locs < ncurrent_locs; locs++)
             {
                 PrintToFile(intcurrentfilename)
-                << integrated_displacement_currents[locs] << "\t";
+                    << integrated_displacement_currents[locs] << "\t";
             }
             for (int locs = 0; locs < ncurrent_locs; locs++)
             {
                 PrintToFile(intcurrentfilename)
-                << integrated_current_areas[locs] << "\t";
+                    << integrated_current_areas[locs] << "\t";
             }
             PrintToFile(intcurrentfilename) << "\n";
         }

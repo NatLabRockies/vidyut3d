@@ -37,7 +37,7 @@ AMREX_GPU_DEVICE AMREX_INLINE amrex::Real current_collector_value(
             value = 1.0;
         }
     }
-    
+
     return (value);
 }
 

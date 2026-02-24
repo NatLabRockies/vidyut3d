@@ -16,8 +16,8 @@
 
 void Vidyut::compute_disp_current_den(amrex::Real time, amrex::Real tstep)
 {
-    amrex::Real dt=tstep;
-    amrex::Real curtime=time;
+    amrex::Real dt = tstep;
+    amrex::Real curtime = time;
     for (int lev = 0; lev <= finest_level; lev++)
     {
         const auto dx = geom[lev].CellSizeArray();
@@ -41,16 +41,19 @@ void Vidyut::compute_disp_current_den(amrex::Real time, amrex::Real tstep)
             amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
                 if (phinew_arr(i, j, k, CMASK_ID) == 1.0 && curtime > 0.0)
                 {
-                    for(int d=0;d<AMREX_SPACEDIM;d++)
+                    for (int d = 0; d < AMREX_SPACEDIM; d++)
                     {
-                        phinew_arr(i,j,k,DCURX_ID+d)=EPS0*(phinew_arr(i,j,k,EFX_ID+d)-phiold_arr(i,j,k,EFX_ID+d))/dt;
+                        phinew_arr(i, j, k, DCURX_ID + d) =
+                            EPS0 *
+                            (phinew_arr(i, j, k, EFX_ID + d) -
+                             phiold_arr(i, j, k, EFX_ID + d)) /
+                            dt;
                     }
-                }
-                else
+                } else
                 {
-                    for(int d=0;d<AMREX_SPACEDIM;d++)
+                    for (int d = 0; d < AMREX_SPACEDIM; d++)
                     {
-                        phinew_arr(i,j,k,DCURX_ID+d)=0.0;
+                        phinew_arr(i, j, k, DCURX_ID + d) = 0.0;
                     }
                 }
             });
@@ -403,7 +406,7 @@ void Vidyut::compute_integrated_currents()
                         });
                     return si_part;
                 });
-            
+
             dispcurrent += amrex::ReduceSum(
                 phi_new[lev], level_mask, 0,
                 [=] AMREX_GPU_HOST_DEVICE(
