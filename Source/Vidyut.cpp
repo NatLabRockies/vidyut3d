@@ -51,6 +51,14 @@ Vidyut::Vidyut()
     plasma_param_names[16] = "Icurden_X";
     plasma_param_names[17] = "Icurden_Y";
     plasma_param_names[18] = "Icurden_Z";
+#ifdef AMREX_USE_EB
+    plasma_param_names[19] = "EB_cp_x";
+    plasma_param_names[20] = "EB_cp_y";
+    plasma_param_names[21] = "EB_cp_z";
+    plasma_param_names[22] = "EB_norm_x";
+    plasma_param_names[23] = "EB_norm_y";
+    plasma_param_names[24] = "EB_norm_z";
+#endif
 
     allvarnames.resize(NVAR);
     for (int i = 0; i < NUM_SPECIES; i++)

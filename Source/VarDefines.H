@@ -21,6 +21,7 @@
 #define ICURX_ID (NUM_SPECIES + 16)
 #define ICURY_ID (NUM_SPECIES + 17)
 #define ICURZ_ID (NUM_SPECIES + 18)
+#ifdef AMREX_USE_EB
 #define CPX_ID (NUM_SPECIES + 19)
 #define CPY_ID (NUM_SPECIES + 20)
 #define CPZ_ID (NUM_SPECIES + 21)
@@ -28,6 +29,9 @@
 #define NY_ID (NUM_SPECIES + 23)
 #define NZ_ID (NUM_SPECIES + 24)
 #define NUM_PLASMAVARS (NZ_ID - NUM_SPECIES + 1)
+#else
+#define NUM_PLASMAVARS (ICURZ_ID - NUM_SPECIES + 1)
+#endif
 #define NVAR (NUM_SPECIES + NUM_PLASMAVARS)
 
 #define PERBC 0
