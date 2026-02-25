@@ -221,10 +221,22 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     //            << ")\n";
     xib[0] = sb_arr(rcell, CPX_ID); // EB centroid x
     xib[1] = sb_arr(rcell, CPY_ID); // EB centroid y
-    // amrex::Print() << "Using EB centroid as surface point: xib = (" << xib[0]
-    // << ", " << xib[1]
-    //            << ")\n";
-    amrex::Real rad = sqrt(xib[0] * xib[0] + xib[1] * xib[1]);
+    // Project xib onto the exact cylinder surface for improved numerical accuracy:
+    // the EB centroid deviates from the true surface by O(dx), whereas the exact
+    // projection eliminates this error entirely.
+    {
+        amrex::Real r_xib = std::sqrt(xib[0] * xib[0] + xib[1] * xib[1]);
+        amrex::Real midrad =
+            0.5 * (prob_parm.inner_radius + prob_parm.outer_radius);
+        amrex::Real R_exact = (r_xib > midrad) ? prob_parm.outer_radius
+                                               : prob_parm.inner_radius;
+        if (r_xib > 0.0)
+        {
+            xib[0] = xib[0] / r_xib * R_exact;
+            xib[1] = xib[1] / r_xib * R_exact;
+        }
+    }
+    amrex::Real rad = std::sqrt(xib[0] * xib[0] + xib[1] * xib[1]);
     amrex::Real ndens = 0.0;
     for (int sp = 0; sp < NUM_SPECIES; sp++) ndens += sb_arr(intcell, sp);
     // amrex::Print()<<intcell<<std::endl;
@@ -233,8 +245,9 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
         if (0.5 * (prob_parm.inner_radius + prob_parm.outer_radius) < rad)
         {
             amrex::Real phi_dirc = rad * rad * rad * rad;
-            amrex::Real dphidn =
-                4 * rad * rad * rad * std::fabs(xib[dir]) / rad;
+            // True radial normal derivative of phi = r^4 at the outer surface:
+            // dphi/dn = d(r^4)/dr = 4*r^3 (outward normal = +r_hat for outer cylinder)
+            amrex::Real dphidn = 4 * rad * rad * rad;
             amrex::Real bc_value = prob_parm.a_outer_dir * phi_dirc +
                                    prob_parm.b_outer_neumann * dphidn;
             amrex::Real ccibvec[AMREX_SPACEDIM];
@@ -262,10 +275,11 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
         } else
         {
             amrex::Real phi_dirc = rad * rad * rad * rad;
-            amrex::Real dphidn =
-                -4 * rad * rad * rad * std::fabs(xib[dir]) / rad;
-            amrex::Real bc_value = prob_parm.a_outer_dir * phi_dirc +
-                                   prob_parm.b_outer_neumann * dphidn;
+            // True radial normal derivative of phi = r^4 at the inner surface:
+            // dphi/dn = -d(r^4)/dr = -4*r^3 (outward normal = -r_hat for inner cylinder)
+            amrex::Real dphidn = -4 * rad * rad * rad;
+            amrex::Real bc_value = prob_parm.a_inner_dir * phi_dirc +
+                                   prob_parm.b_inner_neumann * dphidn;
             amrex::Real ccibvec[AMREX_SPACEDIM];
             ccibvec[0] = prob_lo[0] + (intcell[0] + 0.5) * dx[0] - xib[0];
             ccibvec[1] = prob_lo[1] + (intcell[1] + 0.5) * dx[1] - xib[1];
@@ -275,15 +289,14 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
             const amrex::Real alpha =
                 ccibvec[dir] / d_ccib2 * outward_normal[dir];
             acoeff(intcell) += alpha / dx[dir] *
-                               (1 + prob_parm.b_outer_neumann * alpha /
-                                        (prob_parm.a_outer_dir -
-                                         prob_parm.b_outer_neumann * alpha));
+                               (1 + prob_parm.b_inner_neumann * alpha /
+                                        (prob_parm.a_inner_dir -
+                                         prob_parm.b_inner_neumann * alpha));
             rhs(intcell, rhs_comp) +=
                 bc_value * alpha / dx[dir] * 1.0 /
-                (prob_parm.a_outer_dir - prob_parm.b_outer_neumann * alpha);
+                (prob_parm.a_inner_dir - prob_parm.b_inner_neumann * alpha);
             /*acoeff(intcell) += alpha / dx[dir] ;
-            rhs(intcell, rhs_comp) += bc_value * alpha / dx[dir]*/
-            ;
+            rhs(intcell, rhs_comp) += bc_value * alpha / dx[dir] ;*/
         }
     } else if (solved_comp == NI_ID)
     {
