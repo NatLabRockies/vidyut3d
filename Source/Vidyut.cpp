@@ -51,6 +51,9 @@ Vidyut::Vidyut()
     plasma_param_names[16] = "Icurden_X";
     plasma_param_names[17] = "Icurden_Y";
     plasma_param_names[18] = "Icurden_Z";
+    plasma_param_names[19] = "Dcurden_X";
+    plasma_param_names[20] = "Dcurden_Y";
+    plasma_param_names[21] = "Dcurden_Z";
 
     allvarnames.resize(NVAR);
     for (int i = 0; i < NUM_SPECIES; i++)
@@ -660,7 +663,7 @@ void Vidyut::set_explicit_fluxes_at_ib(
 #endif
 #endif
         amrex::ParallelFor(bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) {
-            if (sb_arr(i, j, k, CMASK_ID) == 0.0)
+            if (sb_arr(i, j, k, CMASK_ID) < 1.0)
             {
                 rhs_arr(i, j, k, rhscompid) = 0.0;
             }
