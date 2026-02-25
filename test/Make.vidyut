@@ -17,7 +17,7 @@ include $(Bpack)
 INCLUDE_LOCATIONS += $(Blocs)
 VPATH_LOCATIONS   += $(Blocs)
 
-Pdirs 	:= Base Boundary AmrCore LinearSolvers/MLMG
+Pdirs 	:= Base Boundary AmrCore EB LinearSolvers/MLMG
 ifeq ($(USE_SENSEI_INSITU),TRUE)
 	Pdirs += Amr Extern/SENSEI
 endif
@@ -25,7 +25,7 @@ Ppack	+= $(foreach dir, $(Pdirs), $(AMREX_HOME)/Src/$(dir)/Make.package)
 
 include $(Ppack)
 
-all: $(executable) 
+all: $(executable)
 	@echo SUCCESS
 
 include $(AMREX_HOME)/Tools/GNUMake/Make.rules
