@@ -21,24 +21,20 @@
 #define ICURX_ID (NUM_SPECIES + 16)
 #define ICURY_ID (NUM_SPECIES + 17)
 #define ICURZ_ID (NUM_SPECIES + 18)
-<<<<<<< hg/amrex-eb-demo
-#ifdef AMREX_USE_EB
-#define CPX_ID (NUM_SPECIES + 19)
-#define CPY_ID (NUM_SPECIES + 20)
-#define CPZ_ID (NUM_SPECIES + 21)
-#define NX_ID (NUM_SPECIES + 22)
-#define NY_ID (NUM_SPECIES + 23)
-#define NZ_ID (NUM_SPECIES + 24)
-#define NUM_PLASMAVARS (NZ_ID - NUM_SPECIES + 1)
-#else
-#define NUM_PLASMAVARS (ICURZ_ID - NUM_SPECIES + 1)
-#endif
-=======
 #define DCURX_ID (NUM_SPECIES + 19)
 #define DCURY_ID (NUM_SPECIES + 20)
 #define DCURZ_ID (NUM_SPECIES + 21)
+#ifdef AMREX_USE_EB
+#define CPX_ID (NUM_SPECIES + 22)
+#define CPY_ID (NUM_SPECIES + 23)
+#define CPZ_ID (NUM_SPECIES + 24)
+#define NX_ID (NUM_SPECIES + 25)
+#define NY_ID (NUM_SPECIES + 26)
+#define NZ_ID (NUM_SPECIES + 27)
+#define NUM_PLASMAVARS (NZ_ID - NUM_SPECIES + 1)
+#else
 #define NUM_PLASMAVARS (DCURZ_ID - NUM_SPECIES + 1)
->>>>>>> main
+#endif
 #define NVAR (NUM_SPECIES + NUM_PLASMAVARS)
 
 #define PERBC 0
