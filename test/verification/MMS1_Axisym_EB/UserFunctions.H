@@ -219,85 +219,48 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     // amrex::Print() << "cutcell = " << cutcell << " xib = (" << xib[0] << ", "
     // << xib[1]
     //            << ")\n";
-    xib[0] = sb_arr(rcell, CPX_ID); // EB centroid x
-    xib[1] = sb_arr(rcell, CPY_ID); // EB centroid y
-    // Project xib onto the exact cylinder surface for improved numerical accuracy:
-    // the EB centroid deviates from the true surface by O(dx), whereas the exact
-    // projection eliminates this error entirely.
-    {
-        amrex::Real r_xib = std::sqrt(xib[0] * xib[0] + xib[1] * xib[1]);
-        amrex::Real midrad =
-            0.5 * (prob_parm.inner_radius + prob_parm.outer_radius);
-        amrex::Real R_exact = (r_xib > midrad) ? prob_parm.outer_radius
-                                               : prob_parm.inner_radius;
-        if (r_xib > 0.0)
-        {
-            xib[0] = xib[0] / r_xib * R_exact;
-            xib[1] = xib[1] / r_xib * R_exact;
-        }
-    }
+    // Always read EB centroid from the cut cell, not from rcell, so that when
+    // sgn == -1 (fluid on the right, cut cell on the left) we use the correct
+    // EB geometry data rather than data propagated to the interior fluid cell.
+    xib[0] = sb_arr(cutcell, CPX_ID); // EB centroid x
+    xib[1] = sb_arr(cutcell, CPY_ID); // EB centroid y
     amrex::Real rad = std::sqrt(xib[0] * xib[0] + xib[1] * xib[1]);
     amrex::Real ndens = 0.0;
     for (int sp = 0; sp < NUM_SPECIES; sp++) ndens += sb_arr(intcell, sp);
     // amrex::Print()<<intcell<<std::endl;
     if (solved_comp == POT_ID)
     {
-        if (0.5 * (prob_parm.inner_radius + prob_parm.outer_radius) < rad)
-        {
-            amrex::Real phi_dirc = rad * rad * rad * rad;
-            // True radial normal derivative of phi = r^4 at the outer surface:
-            // dphi/dn = d(r^4)/dr = 4*r^3 (outward normal = +r_hat for outer cylinder)
-            amrex::Real dphidn = 4 * rad * rad * rad;
-            amrex::Real bc_value = prob_parm.a_outer_dir * phi_dirc +
-                                   prob_parm.b_outer_neumann * dphidn;
-            amrex::Real ccibvec[AMREX_SPACEDIM];
-            ccibvec[0] = prob_lo[0] + (intcell[0] + 0.5) * dx[0] - xib[0];
-            ccibvec[1] = prob_lo[1] + (intcell[1] + 0.5) * dx[1] - xib[1];
-            amrex::Real d_ccib2 =
-                ccibvec[0] * ccibvec[0] + ccibvec[1] * ccibvec[1];
-            amrex::Real d_ccib_sqrt = std::sqrt(d_ccib2);
-            const amrex::Real alpha =
-                ccibvec[dir] / d_ccib2 * outward_normal[dir];
-            acoeff(intcell) += alpha / dx[dir] *
-                               (1 + prob_parm.b_outer_neumann * alpha /
-                                        (prob_parm.a_outer_dir -
-                                         prob_parm.b_outer_neumann * alpha));
-            rhs(intcell, rhs_comp) +=
-                bc_value * alpha / dx[dir] * 1.0 /
-                (prob_parm.a_outer_dir - prob_parm.b_outer_neumann * alpha);
-            /*acoeff(intcell) += alpha / dx[dir] ;
-            rhs(intcell, rhs_comp) += bc_value * alpha / dx[dir] ;*/
-            /*amrex::Print() << " Applying outer Dirichlet BC at cell " << alpha
-                           << " with bc_value = " << bc_value
-                           << " and a_outer_dir = " << prob_parm.a_outer_dir
-                           << " and b_outer_neumann = "
-                           << prob_parm.b_outer_neumann << "\n";*/
-        } else
-        {
-            amrex::Real phi_dirc = rad * rad * rad * rad;
-            // True radial normal derivative of phi = r^4 at the inner surface:
-            // dphi/dn = -d(r^4)/dr = -4*r^3 (outward normal = -r_hat for inner cylinder)
-            amrex::Real dphidn = -4 * rad * rad * rad;
-            amrex::Real bc_value = prob_parm.a_inner_dir * phi_dirc +
-                                   prob_parm.b_inner_neumann * dphidn;
-            amrex::Real ccibvec[AMREX_SPACEDIM];
-            ccibvec[0] = prob_lo[0] + (intcell[0] + 0.5) * dx[0] - xib[0];
-            ccibvec[1] = prob_lo[1] + (intcell[1] + 0.5) * dx[1] - xib[1];
-            amrex::Real d_ccib2 =
-                ccibvec[0] * ccibvec[0] + ccibvec[1] * ccibvec[1];
-            amrex::Real d_ccib_sqrt = std::sqrt(d_ccib2);
-            const amrex::Real alpha =
-                ccibvec[dir] / d_ccib2 * outward_normal[dir];
-            acoeff(intcell) += alpha / dx[dir] *
-                               (1 + prob_parm.b_inner_neumann * alpha /
-                                        (prob_parm.a_inner_dir -
-                                         prob_parm.b_inner_neumann * alpha));
-            rhs(intcell, rhs_comp) +=
-                bc_value * alpha / dx[dir] * 1.0 /
-                (prob_parm.a_inner_dir - prob_parm.b_inner_neumann * alpha);
-            /*acoeff(intcell) += alpha / dx[dir] ;
-            rhs(intcell, rhs_comp) += bc_value * alpha / dx[dir] ;*/
-        }
+        amrex::Real phi_dirc = rad * rad * rad * rad;
+        // Use the EB normal stored from AMReX getBndryNormal() (NX_ID, NY_ID).
+        // AMReX convention: the EB normal points FROM the EB surface INTO the
+        // fluid, so the outward domain normal (from fluid into solid) is its
+        // negation.  For phi = r^4:
+        //   dphi/dn_outward = nabla(phi) . (-n_EB)
+        //                   = -(4*r^2*(xib_x, xib_y)) . (neb_x, neb_y)
+        amrex::Real neb_x = sb_arr(cutcell, NX_ID);
+        amrex::Real neb_y = sb_arr(cutcell, NY_ID);
+        amrex::Real dphidn =
+            -4.0 * rad * rad * (xib[0] * neb_x + xib[1] * neb_y);
+        // Select BC parameters based on which cylinder the cut cell is next to
+        bool is_outer =
+            (rad > 0.5 * (prob_parm.inner_radius + prob_parm.outer_radius));
+        amrex::Real a_coeff =
+            is_outer ? prob_parm.a_outer_dir : prob_parm.a_inner_dir;
+        amrex::Real b_coeff =
+            is_outer ? prob_parm.b_outer_neumann : prob_parm.b_inner_neumann;
+        amrex::Real bc_value = a_coeff * phi_dirc + b_coeff * dphidn;
+        amrex::Real ccibvec[AMREX_SPACEDIM];
+        ccibvec[0] = prob_lo[0] + (intcell[0] + 0.5) * dx[0] - xib[0];
+        ccibvec[1] = prob_lo[1] + (intcell[1] + 0.5) * dx[1] - xib[1];
+        amrex::Real d_ccib2 =
+            ccibvec[0] * ccibvec[0] + ccibvec[1] * ccibvec[1];
+        const amrex::Real alpha =
+            ccibvec[dir] / d_ccib2 * outward_normal[dir];
+        acoeff(intcell) +=
+            alpha / dx[dir] *
+            (1 + b_coeff * alpha / (a_coeff - b_coeff * alpha));
+        rhs(intcell, rhs_comp) +=
+            bc_value * alpha / dx[dir] * 1.0 / (a_coeff - b_coeff * alpha);
     } else if (solved_comp == NI_ID)
     {
         amrex::Real ndens = 0.0;
