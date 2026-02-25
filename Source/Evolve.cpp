@@ -411,12 +411,13 @@ void Vidyut::Evolve()
                                     int nbx, int i, int j, int k) noexcept {
                                     auto phi_arr = phi_arrays[nbx];
                                     auto rxn_arr = rxn_arrays[nbx];
-                                    phi_arr(i, j, k, ind) +=
-                                        rxn_arr(i, j, k, ind) * dt_common;
-                                    if (phi_arr(i, j, k, ind) < minspecden &&
+                                    IntVect cellid{AMREX_D_DECL(i, j, k)};
+                                    phi_arr(cellid, ind) +=
+                                        rxn_arr(cellid, ind) * dt_common;
+                                    if (phi_arr(cellid, ind) < minspecden &&
                                         boundspecden)
                                     {
-                                        phi_arr(i, j, k, ind) = minspecden;
+                                        phi_arr(cellid, ind) = minspecden;
                                     }
                                 });
                         }
