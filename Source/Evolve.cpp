@@ -48,8 +48,14 @@ void Vidyut::Evolve()
         for (int locs = 0; locs < ncurrent_locs; locs++)
         {
             PrintToFile(intcurrentfilename)
-                << "current_surface_" << locs << current_loc_surfaces[locs]
-                << "\t";
+                << "conduction_current_surface_" << locs
+                << current_loc_surfaces[locs] << "\t";
+        }
+        for (int locs = 0; locs < ncurrent_locs; locs++)
+        {
+            PrintToFile(intcurrentfilename)
+                << "displacement_current_surface_" << locs
+                << current_loc_surfaces[locs] << "\t";
         }
         for (int locs = 0; locs < ncurrent_locs; locs++)
         {
@@ -123,7 +129,7 @@ void Vidyut::Evolve()
             {
                 amrex::Print()
                     << "[Level " << lev << " step " << istep[lev] + 1 << "] ";
-                amrex::Print() << "ADVANCE with time = " << t_new[lev]
+                amrex::Print() << "ADVANCING with time = " << t_new[lev]
                                << " dt = " << dt[0] << std::endl;
             }
         }
@@ -405,12 +411,13 @@ void Vidyut::Evolve()
                                     int nbx, int i, int j, int k) noexcept {
                                     auto phi_arr = phi_arrays[nbx];
                                     auto rxn_arr = rxn_arrays[nbx];
-                                    phi_arr(i, j, k, ind) +=
-                                        rxn_arr(i, j, k, ind) * dt_common;
-                                    if (phi_arr(i, j, k, ind) < minspecden &&
+                                    IntVect cellid{AMREX_D_DECL(i, j, k)};
+                                    phi_arr(cellid, ind) +=
+                                        rxn_arr(cellid, ind) * dt_common;
+                                    if (phi_arr(cellid, ind) < minspecden &&
                                         boundspecden)
                                     {
-                                        phi_arr(i, j, k, ind) = minspecden;
+                                        phi_arr(cellid, ind) = minspecden;
                                     }
                                 });
                         }
@@ -552,6 +559,7 @@ void Vidyut::Evolve()
                         Sborder[lev].nComp());
                 }
                 compute_current_den(Sborder);
+                compute_disp_current_den(cur_time, dt_common);
 
                 if (track_integrated_currents)
                 {
@@ -653,7 +661,12 @@ void Vidyut::Evolve()
                 for (int locs = 0; locs < ncurrent_locs; locs++)
                 {
                     PrintToFile(intcurrentfilename)
-                        << integrated_currents[locs] << "\t";
+                        << integrated_conduction_currents[locs] << "\t";
+                }
+                for (int locs = 0; locs < ncurrent_locs; locs++)
+                {
+                    PrintToFile(intcurrentfilename)
+                        << integrated_displacement_currents[locs] << "\t";
                 }
                 for (int locs = 0; locs < ncurrent_locs; locs++)
                 {
@@ -685,7 +698,12 @@ void Vidyut::Evolve()
             for (int locs = 0; locs < ncurrent_locs; locs++)
             {
                 PrintToFile(intcurrentfilename)
-                    << integrated_currents[locs] << "\t";
+                    << integrated_conduction_currents[locs] << "\t";
+            }
+            for (int locs = 0; locs < ncurrent_locs; locs++)
+            {
+                PrintToFile(intcurrentfilename)
+                    << integrated_displacement_currents[locs] << "\t";
             }
             for (int locs = 0; locs < ncurrent_locs; locs++)
             {

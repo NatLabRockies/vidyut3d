@@ -85,6 +85,9 @@ vidyut.user_defined_species = 1
 vidyut.user_defined_vel = 1
 vidyut.track_surf_charge = 1
 vidyut.track_current_den = 1
+vidyut.track_integrated_currents=1
+vidyut.current_loc_surfaces=0 1
+vidyut.print_current_int=100
 
 vidyut.gas_pressure=400.0
 vidyut.gas_temperature=300.0

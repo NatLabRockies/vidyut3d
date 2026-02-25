@@ -40,7 +40,7 @@ void Vidyut::solve_potential(
     {
         for (int i = 0; i < ncurrent_locs; i++)
         {
-            int_currents[i] = integrated_currents[i];
+            int_currents[i] = integrated_conduction_currents[i];
             int_current_areas[i] = integrated_current_areas[i];
             int_current_surfaces[i] = current_loc_surfaces[i];
         }
