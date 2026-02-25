@@ -8,7 +8,7 @@
 
 using namespace amrex;
 namespace user_transport {
-AMREX_GPU_DEVICE AMREX_INLINE amrex::Real current_collector_value(
+AMREX_GPU_HOST_DEVICE AMREX_INLINE amrex::Real current_collector_value(
     IntVect cellid,
     int locid,
     int surfaceloc,
