@@ -137,13 +137,13 @@ void Vidyut::compute_current_density_at_level(
     int ib_enabled = using_ib;
     int eidx = E_IDX;
 
-    const int* domlo_arr = geom[lev].Domain().loVect();
-    const int* domhi_arr = geom[lev].Domain().hiVect();
+    const int* domlo = geom[lev].Domain().loVect();
+    const int* domhi = geom[lev].Domain().hiVect();
 
-    GpuArray<int, AMREX_SPACEDIM> domlo = {
-        AMREX_D_DECL(domlo_arr[0], domlo_arr[1], domlo_arr[2])};
-    GpuArray<int, AMREX_SPACEDIM> domhi = {
-        AMREX_D_DECL(domhi_arr[0], domhi_arr[1], domhi_arr[2])};
+    GpuArray<int, AMREX_SPACEDIM> domlo_arr = {
+        AMREX_D_DECL(domlo[0], domlo[1], domlo[2])};
+    GpuArray<int, AMREX_SPACEDIM> domhi_arr = {
+        AMREX_D_DECL(domhi[0], domhi[1], domhi[2])};
 
 #ifdef _OPENMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
