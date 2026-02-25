@@ -17,9 +17,12 @@ include $(Bpack)
 INCLUDE_LOCATIONS += $(Blocs)
 VPATH_LOCATIONS   += $(Blocs)
 
-Pdirs 	:= Base Boundary AmrCore EB LinearSolvers/MLMG
+Pdirs 	:= Base Boundary AmrCore LinearSolvers/MLMG
 ifeq ($(USE_SENSEI_INSITU),TRUE)
 	Pdirs += Amr Extern/SENSEI
+endif
+ifeq ($(USE_EB),TRUE)
+	Pdirs += EB
 endif
 Ppack	+= $(foreach dir, $(Pdirs), $(AMREX_HOME)/Src/$(dir)/Make.package)
 
