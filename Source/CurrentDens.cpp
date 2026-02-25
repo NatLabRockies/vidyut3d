@@ -196,9 +196,9 @@ void Vidyut::compute_current_density_at_level(
                             (mask_L) * (!mask_R) + (!mask_L) * (mask_R);
 
                         int left_phys_boundary =
-                            (face[idim] == domlo_arr[idim]);
+                            (face[idim] == domlo[idim]);
                         int right_phys_boundary =
-                            (face[idim] == (domhi_arr[idim] + 1));
+                            (face[idim] == (domhi[idim] + 1));
 
                         if (!covered_interface)
                         {
