@@ -9,6 +9,7 @@
 
 using namespace amrex;
 namespace user_transport {
+
 AMREX_GPU_DEVICE AMREX_INLINE amrex::Real current_collector_value(
     IntVect cellid,
     int locid,
@@ -268,6 +269,7 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
             amrex::Real ccibvec[AMREX_SPACEDIM];
             ccibvec[0] = prob_lo[0] + (intcell[0] + 0.5) * dx[0] - xib[0];
             ccibvec[1] = prob_lo[1] + (intcell[1] + 0.5) * dx[1] - xib[1];
+            outward_normal[dir] = -sgn3(ccibvec[dir]);
             amrex::Real d_ccib2 =
                 ccibvec[0] * ccibvec[0] + ccibvec[1] * ccibvec[1];
             amrex::Real d_ccib_sqrt = std::sqrt(d_ccib2);
@@ -300,6 +302,7 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
             amrex::Real d_ccib2 =
                 ccibvec[0] * ccibvec[0] + ccibvec[1] * ccibvec[1];
             amrex::Real d_ccib_sqrt = std::sqrt(d_ccib2);
+            outward_normal[dir] = -sgn3(ccibvec[dir]);
             const amrex::Real alpha =
                 ccibvec[dir] / d_ccib2 * outward_normal[dir];
             acoeff(intcell) += alpha / dx[dir] *
@@ -328,6 +331,7 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
         ccibvec[1] = prob_lo[1] + (intcell[1] + 0.5) * dx[1] - xib[1];
         amrex::Real d_ccib2 = ccibvec[0] * ccibvec[0] + ccibvec[1] * ccibvec[1];
         amrex::Real d_ccib_sqrt = std::sqrt(d_ccib2);
+        outward_normal[dir] = -sgn3(ccibvec[dir]);
         const amrex::Real alpha = ccibvec[dir] / d_ccib2 * outward_normal[dir];
         acoeff(intcell) -= Dcoeff / dx[dir] * alpha;
         rhs(intcell, rhs_comp) -= 16 * Dcoeff / dx[dir] * rad * rad * alpha;
@@ -335,13 +339,31 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
             specMob(solved_comp, sb_arr(intcell, ETEMP_ID), ndens, emag, Tg);
         amrex::Real vel = mu * sb_arr(intcell, EFX_ID + dir);
         amrex::Real flux = 0.0;
+        // Determine "away-from-EB" neighbour direction (one extra interior
+        // cell)
+        int step_sign = ((intcell[0] == lcell[0]) && (intcell[1] == lcell[1])
+#if (AMREX_SPACEDIM == 3)
+                         && (intcell[2] == lcell[2])
+#endif
+                             )
+                            ? -1
+                            : +1;
         if (sb_arr(rcell, CMASK_ID) < 1)
         {
-            flux = (vel > 0) ? sb_arr(intcell, solved_comp) : 16 * rad * rad;
+            IntVect nb = intcell;
+            nb[dir] += step_sign;
+            const amrex::Real value =
+                0.5 *
+                (3.0 * sb_arr(intcell, solved_comp) - sb_arr(nb, solved_comp));
+            flux = (vel > 0) ? value : 16 * rad * rad;
             rhs(intcell, rhs_comp) -= flux * vel / dx[dir];
         } else
         {
-            flux = (vel > 0) ? 16 * rad * rad : sb_arr(intcell, solved_comp);
+            IntVect nb = intcell;
+            nb[dir] += step_sign;
+            const amrex::Real value =
+                0.5 * (sb_arr(intcell, solved_comp) + sb_arr(nb, solved_comp));
+            flux = (vel > 0) ? 16 * rad * rad : value;
             rhs(intcell, rhs_comp) += flux * vel / dx[dir];
         }
     } else

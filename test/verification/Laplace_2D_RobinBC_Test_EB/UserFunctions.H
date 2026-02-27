@@ -271,6 +271,7 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
             amrex::Real d_ccib2 =
                 ccibvec[0] * ccibvec[0] + ccibvec[1] * ccibvec[1];
             amrex::Real d_ccib_sqrt = std::sqrt(d_ccib2);
+            outward_normal[dir] = -sgn3(ccibvec[dir]);
             const amrex::Real alpha =
                 ccibvec[dir] / d_ccib2 * outward_normal[dir];
             acoeff(intcell) += alpha / dx[dir] *
@@ -301,6 +302,7 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
             amrex::Real dphidn = -dphidr * std::fabs(xib[dir]) / rad;
             amrex::Real bc_value = prob_parm.a_inner_dir * phi_dirc +
                                    prob_parm.b_inner_neumann * dphidn;
+            outward_normal[dir] = -sgn3(ccibvec[dir]);
             const amrex::Real alpha =
                 ccibvec[dir] / d_ccib2 * outward_normal[dir];
             acoeff(intcell) += alpha / dx[dir] *
