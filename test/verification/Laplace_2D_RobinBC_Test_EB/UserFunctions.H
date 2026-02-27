@@ -246,8 +246,8 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     // amrex::Print() << "cutcell = " << cutcell << " xib = (" << xib[0] << ", "
     // << xib[1]
     //            << ")\n";
-    xib[0] = sb_arr(rcell, CPX_ID); // EB centroid x
-    xib[1] = sb_arr(rcell, CPY_ID); // EB centroid y
+    xib[0] = sb_arr(cutcell, CPX_ID); // EB centroid x
+    xib[1] = sb_arr(cutcell, CPY_ID); // EB centroid y
     // amrex::Print() << "Using EB centroid as surface point: xib = (" << xib[0]
     // << ", " << xib[1]
     //            << ")\n";
