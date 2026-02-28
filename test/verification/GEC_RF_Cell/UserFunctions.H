@@ -61,6 +61,7 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     int rhs_comp,
     Array4<Real> const& sb_arr,
     Array4<Real> const& acoeff,
+    Array4<Real> const& bcoeff,
     Array4<Real> const& rhs,
     GpuArray<int, AMREX_SPACEDIM> domlo,
     GpuArray<int, AMREX_SPACEDIM> domhi,
