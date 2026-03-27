@@ -319,9 +319,9 @@ void Vidyut::solve_potential(
                                 captured_gastemp);
 
                         //note: since mu_e is negative, tau_diel comes out
-                        //to be negative
-                        amrex::Real tau_diel=EPS0/(ECHARGE*mu_e*sb_arr(i,j,k,eidx));
-                        bcoeff_arr(i,j,k)=-1.0+dt/tau_diel;
+                        //to be negative, but doing abs to avoid confusion
+                        amrex::Real tau_diel=amrex::Math::abs(EPS0/(ECHARGE*mu_e*sb_arr(i,j,k,eidx)));
+                        bcoeff_arr(i,j,k)=-(1.0+dt/tau_diel); //negative beta
                     }
                 });
             }
@@ -431,7 +431,7 @@ void Vidyut::solve_potential(
             null_bcoeff_at_ib(ilev, face_bcoeff, Sborder[ilev], 1);
             amrex::Print() << "calling explicit fluxes\n";
             set_explicit_fluxes_at_ib(
-                    ilev, rhs[ilev], acoeff[ilev], bcoeff[ilev],
+                    ilev, ascalar, bscalar, rhs[ilev], acoeff[ilev], bcoeff[ilev],
                     Sborder[ilev], current_time,
                     POT_ID, 0);
         }

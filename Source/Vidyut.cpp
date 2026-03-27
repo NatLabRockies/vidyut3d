@@ -624,6 +624,8 @@ void Vidyut::null_bcoeff_at_ib(
 
 void Vidyut::set_explicit_fluxes_at_ib(
     int ilev,
+    amrex::Real ascalar,
+    amrex::Real bscalar,
     MultiFab& rhs,
     MultiFab& acoeff,
     MultiFab& bcoeff,
@@ -696,7 +698,7 @@ void Vidyut::set_explicit_fluxes_at_ib(
 
                         user_transport::bc_ib(
                             face, idim, sgn, solved_comp, rhs_comp, sb_arr,
-                            acoeff_arr, bcoeff_arr, rhs_arr, domlo, domhi, prob_lo, prob_hi,
+                            ascalar,bscalar,acoeff_arr, bcoeff_arr, rhs_arr, domlo, domhi, prob_lo, prob_hi,
                             dx, captured_time, *localprobparm, captured_gastemp,
                             captured_gaspres);
                     }

@@ -399,7 +399,7 @@ void Vidyut::solve_photoionization(
         {
             null_bcoeff_at_ib(ilev, face_bcoeff, Sborder[ilev], 1);
             set_explicit_fluxes_at_ib(
-                ilev, rhs[ilev], acoeff[ilev], bcoeff[ilev],
+                ilev, ascalar, bscalar, rhs[ilev], acoeff[ilev], bcoeff[ilev],
                 Sborder[ilev], current_time,
                 PHOTO_ION_SRC_ID, 0);
         }

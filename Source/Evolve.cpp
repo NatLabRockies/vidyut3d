@@ -235,6 +235,7 @@ void Vidyut::Evolve()
                 }
                 expl_src[lev].setVal(0.0);
                 rxn_src[lev].setVal(0.0);
+                ephi_src[lev].setVal(0.0);
             }
 
             if(!electron_poisson_coupling)
@@ -303,7 +304,7 @@ void Vidyut::Evolve()
                         cur_time + time_offset, dt_common, E_IDX, 1, Sborder,
                         Sborder_old, expl_src, eden_bc_lo, eden_bc_hi, gradne_fc);
 
-                    for(int ilev=0;ilev<=finest_level+1;ilev++)
+                    for(int ilev=0;ilev<=finest_level;ilev++)
                     {
                         //ephisrc=1/dt(ne^k+1-ne^n)
                         MultiFab::LinComb(ephi_src[ilev], 

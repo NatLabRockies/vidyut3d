@@ -322,6 +322,8 @@ public:
 
     void set_explicit_fluxes_at_ib(
         int lev,
+        amrex::Real ascalar,
+        amrex::Real bscalar,
         MultiFab& rhs,
         MultiFab& acoeff,
         MultiFab& bcoeff,
