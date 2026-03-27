@@ -433,7 +433,7 @@ void Vidyut::ReadParameters()
         pp.query("evolve_verbose", evolve_verbose);
         pp.query("track_current_den", track_current_den);
         pp.query("int_current_filename", intcurrentfilename);
-        
+
         pp.query("electron_poisson_coupling", electron_poisson_coupling);
         pp.query("electron_poisson_maxiters", electron_poisson_maxiters);
 
@@ -660,7 +660,7 @@ void Vidyut::set_explicit_fluxes_at_ib(
         Array4<Real> rhs_arr = rhs.array(mfi);
         Array4<Real> acoeff_arr = acoeff.array(mfi);
         Array4<Real> bcoeff_arr = bcoeff.array(mfi);
-    
+
         Array<Box, AMREX_SPACEDIM> face_boxes;
         face_boxes[0] = mfi.nodaltilebox(0);
 #if AMREX_SPACEDIM > 1
@@ -698,9 +698,9 @@ void Vidyut::set_explicit_fluxes_at_ib(
 
                         user_transport::bc_ib(
                             face, idim, sgn, solved_comp, rhs_comp, sb_arr,
-                            ascalar,bscalar,acoeff_arr, bcoeff_arr, rhs_arr, domlo, domhi, prob_lo, prob_hi,
-                            dx, captured_time, *localprobparm, captured_gastemp,
-                            captured_gaspres);
+                            ascalar, bscalar, acoeff_arr, bcoeff_arr, rhs_arr,
+                            domlo, domhi, prob_lo, prob_hi, dx, captured_time,
+                            *localprobparm, captured_gastemp, captured_gaspres);
                     }
                 });
         }

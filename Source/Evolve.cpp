@@ -149,8 +149,8 @@ void Vidyut::Evolve()
         Vector<MultiFab> Sborder(finest_level + 1);
         Vector<MultiFab> Sborder_old(finest_level + 1);
         Vector<MultiFab> phi_tmp(finest_level + 1);
-        //electron poisson coupling
-        Vector<MultiFab> ephi_src(finest_level + 1); 
+        // electron poisson coupling
+        Vector<MultiFab> ephi_src(finest_level + 1);
         // this is declared only to copy to phi, so that it can be used to
         // post-process as a variable
 
@@ -238,26 +238,26 @@ void Vidyut::Evolve()
                 ephi_src[lev].setVal(0.0);
             }
 
-            if(!electron_poisson_coupling)
+            if (!electron_poisson_coupling)
             {
                 // add dt/2 after niter=0
                 solve_potential(
-                    cur_time + time_offset, Sborder, Sborder_old,
-                    pot_bc_lo, pot_bc_hi,
-                    efield_fc,electron_poisson_coupling,dt_common,ephi_src);
+                    cur_time + time_offset, Sborder, Sborder_old, pot_bc_lo,
+                    pot_bc_hi, efield_fc, electron_poisson_coupling, dt_common,
+                    ephi_src);
 
                 // fillpatching here to get the latest potentials in
                 // sborder so that it can be used in efield calc
-                fill_sborder(Sborder,cur_time,dt_common);
+                fill_sborder(Sborder, cur_time, dt_common);
 
                 if (using_ib)
                 {
                     correct_efields_ib(Sborder, efield_fc, cur_time);
                     // fillpatching here to get the latest potentials in
                     // sborder so that it can be used in efield calc
-                    fill_sborder(Sborder,cur_time,dt_common);
+                    fill_sborder(Sborder, cur_time, dt_common);
                 }
-                
+
                 // Calculate the reactive source terms for all species/levels
                 if (do_reactions)
                 {
@@ -267,23 +267,24 @@ void Vidyut::Evolve()
 
                 if (do_photoionization)
                 {
-                   solve_three_term_photoionization(Sborder,rxn_src,
-                                                    cur_time,time_offset);
+                    solve_three_term_photoionization(
+                        Sborder, rxn_src, cur_time, time_offset);
                 }
                 // electron density solve
                 update_explsrc_at_all_levels(
-                    E_IDX, 1, Sborder, rxn_src, expl_src, eden_bc_lo, eden_bc_hi,
-                    cur_time + time_offset);
+                    E_IDX, 1, Sborder, rxn_src, expl_src, eden_bc_lo,
+                    eden_bc_hi, cur_time + time_offset);
 
                 implicit_solve_scalar(
                     cur_time + time_offset, dt_common, E_IDX, 1, Sborder,
                     Sborder_old, expl_src, eden_bc_lo, eden_bc_hi, gradne_fc);
-            }
-            else
+            } else
             {
-                for(int ephi_iters=0;ephi_iters<electron_poisson_maxiters;ephi_iters++)
+                for (int ephi_iters = 0; ephi_iters < electron_poisson_maxiters;
+                     ephi_iters++)
                 {
-                    // Calculate the reactive source terms for all species/levels
+                    // Calculate the reactive source terms for all
+                    // species/levels
                     if (do_reactions)
                     {
                         update_rxnsrc_at_all_levels(
@@ -292,57 +293,60 @@ void Vidyut::Evolve()
 
                     if (do_photoionization)
                     {
-                        solve_three_term_photoionization(Sborder,rxn_src,cur_time,time_offset);
+                        solve_three_term_photoionization(
+                            Sborder, rxn_src, cur_time, time_offset);
                     }
 
                     // electron density solve
                     update_explsrc_at_all_levels(
-                        E_IDX, 1, Sborder, rxn_src, expl_src, eden_bc_lo, eden_bc_hi,
-                        cur_time + time_offset);
+                        E_IDX, 1, Sborder, rxn_src, expl_src, eden_bc_lo,
+                        eden_bc_hi, cur_time + time_offset);
 
                     implicit_solve_scalar(
                         cur_time + time_offset, dt_common, E_IDX, 1, Sborder,
-                        Sborder_old, expl_src, eden_bc_lo, eden_bc_hi, gradne_fc);
+                        Sborder_old, expl_src, eden_bc_lo, eden_bc_hi,
+                        gradne_fc);
 
-                    for(int ilev=0;ilev<=finest_level;ilev++)
+                    for (int ilev = 0; ilev <= finest_level; ilev++)
                     {
-                        //ephisrc=1/dt(ne^k+1-ne^n)
-                        MultiFab::LinComb(ephi_src[ilev], 
-                                      1.0 / dt_common, phi_new[ilev], E_IDX, 
-                                      -1.0/dt_common, phi_old[ilev], E_IDX,
-                        0, 1, 0);
+                        // ephisrc=1/dt(ne^k+1-ne^n)
+                        MultiFab::LinComb(
+                            ephi_src[ilev], 1.0 / dt_common, phi_new[ilev],
+                            E_IDX, -1.0 / dt_common, phi_old[ilev], E_IDX, 0, 1,
+                            0);
 
-                        //This is now only diffusion src
-                        //ephisrc=1/dt(ne^k+1-ne^n)-expl_src
-                        MultiFab::Saxpy(ephi_src[ilev], 
-                                      -1.0, expl_src[ilev], E_IDX, 0, 1, 0);
+                        // This is now only diffusion src
+                        // ephisrc=1/dt(ne^k+1-ne^n)-expl_src
+                        MultiFab::Saxpy(
+                            ephi_src[ilev], -1.0, expl_src[ilev], E_IDX, 0, 1,
+                            0);
 
+                        // add back rxn_src
+                        // note: a call to update_rxnsrc here
+                        // may add some more implicitness, but may be
+                        // computationally expensive
+                        MultiFab::Saxpy(
+                            ephi_src[ilev], 1.0, rxn_src[ilev], E_IDX, 0, 1, 0);
 
-                        //add back rxn_src
-                        //note: a call to update_rxnsrc here
-                        //may add some more implicitness, but may be
-                        //computationally expensive
-                        MultiFab::Saxpy(ephi_src[ilev], 
-                                      1.0, rxn_src[ilev], E_IDX, 0, 1, 0);
-
-                        ephi_src[ilev].mult(dt_common*ECHARGE/EPS0, 0, 1, 0);
+                        ephi_src[ilev].mult(
+                            dt_common * ECHARGE / EPS0, 0, 1, 0);
                     }
-                    
+
                     solve_potential(
-                        cur_time + time_offset, Sborder, Sborder_old, 
-                        pot_bc_lo, pot_bc_hi,
-                        efield_fc,electron_poisson_coupling,dt_common,ephi_src);
+                        cur_time + time_offset, Sborder, Sborder_old, pot_bc_lo,
+                        pot_bc_hi, efield_fc, electron_poisson_coupling,
+                        dt_common, ephi_src);
 
                     // fillpatching here to get the latest potentials in
                     // sborder so that it can be used in efield calc
-                    fill_sborder(Sborder,cur_time,dt_common);
+                    fill_sborder(Sborder, cur_time, dt_common);
 
                     if (using_ib)
                     {
                         correct_efields_ib(Sborder, efield_fc, cur_time);
                         // fillpatching here to get the latest potentials in
                         // sborder so that it can be used in efield calc
-                        fill_sborder(Sborder,cur_time,dt_common);
+                        fill_sborder(Sborder, cur_time, dt_common);
                     }
                 }
             }
@@ -565,14 +569,14 @@ void Vidyut::Evolve()
             if (track_surf_charge)
             {
                 // getting the latest species data
-                fill_sborder(Sborder,cur_time,dt_common);
+                fill_sborder(Sborder, cur_time, dt_common);
                 update_surf_charge(Sborder, cur_time + time_offset, dt_common);
             }
 
             if (track_current_den)
             {
                 // getting the latest species data
-                fill_sborder(Sborder,cur_time,dt_common);
+                fill_sborder(Sborder, cur_time, dt_common);
                 compute_current_den(Sborder);
                 compute_disp_current_den(cur_time, dt_common);
 
@@ -730,27 +734,30 @@ void Vidyut::Evolve()
     }
 }
 
-void Vidyut::fill_sborder(amrex::Vector<amrex::MultiFab> &Sborder, 
-                         amrex::Real cur_time, amrex::Real dt_common)
+void Vidyut::fill_sborder(
+    amrex::Vector<amrex::MultiFab>& Sborder,
+    amrex::Real cur_time,
+    amrex::Real dt_common)
 {
     for (int lev = 0; lev <= finest_level; lev++)
     {
         Sborder[lev].setVal(0.0);
         FillPatch(
-            lev, cur_time + dt_common, Sborder[lev], 0,
-            Sborder[lev].nComp());
+            lev, cur_time + dt_common, Sborder[lev], 0, Sborder[lev].nComp());
     }
 }
 
-void Vidyut::solve_three_term_photoionization(amrex::Vector<amrex::MultiFab> &Sborder,
-                                              amrex::Vector<amrex::MultiFab> &rxn_src,
-                                           amrex::Real cur_time,amrex::Real time_offset)
+void Vidyut::solve_three_term_photoionization(
+    amrex::Vector<amrex::MultiFab>& Sborder,
+    amrex::Vector<amrex::MultiFab>& rxn_src,
+    amrex::Real cur_time,
+    amrex::Real time_offset)
 {
     Vector<MultiFab> photoion_src(finest_level + 1);
     Vector<MultiFab> photoion_src_total(finest_level + 1);
     for (int lev = 0; lev <= finest_level; lev++)
     {
-        int num_grow= Sborder[lev].nGrow();
+        int num_grow = Sborder[lev].nGrow();
         photoion_src[lev].define(grids[lev], dmap[lev], 1, num_grow);
         photoion_src[lev].setVal(0.0);
 
@@ -764,27 +771,23 @@ void Vidyut::solve_three_term_photoionization(amrex::Vector<amrex::MultiFab> &Sb
     for (int pterm = 0; pterm < 3; pterm++)
     {
         solve_photoionization(
-            cur_time + time_offset, Sborder, photoion_bc_lo,
-            photoion_bc_hi, photoion_src, pterm);
+            cur_time + time_offset, Sborder, photoion_bc_lo, photoion_bc_hi,
+            photoion_src, pterm);
 
         for (int ilev = 0; ilev <= finest_level; ilev++)
         {
             amrex::MultiFab::Saxpy(
-                photoion_src_total[ilev], 1.0, photoion_src[ilev],
-                0, 0, 1, 0);
+                photoion_src_total[ilev], 1.0, photoion_src[ilev], 0, 0, 1, 0);
             amrex::MultiFab::Saxpy(
-                rxn_src[ilev], 1.0, photoion_src[ilev], 0, E_ID, 1,
-                0);
+                rxn_src[ilev], 1.0, photoion_src[ilev], 0, E_ID, 1, 0);
             amrex::MultiFab::Saxpy(
-                rxn_src[ilev], 1.0, photoion_src[ilev], 0,
-                photoion_ID, 1, 0);
+                rxn_src[ilev], 1.0, photoion_src[ilev], 0, photoion_ID, 1, 0);
         }
     }
     for (int ilev = 0; ilev <= finest_level; ilev++)
     {
         // Copy the photion_src_total multifab to the state vector
         amrex::Copy(
-            phi_new[ilev], photoion_src_total[ilev], 0,
-            PHOTO_ION_SRC_ID, 1, 0);
+            phi_new[ilev], photoion_src_total[ilev], 0, PHOTO_ION_SRC_ID, 1, 0);
     }
 }

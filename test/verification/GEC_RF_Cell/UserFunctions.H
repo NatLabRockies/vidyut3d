@@ -120,8 +120,10 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
                 (top_side)
                     ? prob_parm.V1 * std::cos(2.0 * PI * prob_parm.f * time)
                     : prob_parm.V2;
-            acoeff(intcell) += (bscalar/ascalar)*bcoeff(intcell,0.0) / (0.5 * dx2);
-            rhs(intcell, rhs_comp) += bscalar*bcoeff(intcell,0.0)*phi_dirc / (0.5 * dx2);
+            acoeff(intcell) +=
+                (bscalar / ascalar) * bcoeff(intcell, 0.0) / (0.5 * dx2);
+            rhs(intcell, rhs_comp) +=
+                bscalar * bcoeff(intcell, 0.0) * phi_dirc / (0.5 * dx2);
         }
         /*else if(dir==0 && xloc[0]<prob_hi[0])
         {
@@ -131,8 +133,10 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
         else
         {
             amrex::Real phi_dirc = 0.0;
-            acoeff(intcell) += (bscalar/ascalar)*bcoeff(intcell,0.0) / (0.5 * dx2);
-            rhs(intcell, rhs_comp) +=  bscalar*bcoeff(intcell,0.0)*phi_dirc / (0.5 * dx2);
+            acoeff(intcell) +=
+                (bscalar / ascalar) * bcoeff(intcell, 0.0) / (0.5 * dx2);
+            rhs(intcell, rhs_comp) +=
+                bscalar * bcoeff(intcell, 0.0) * phi_dirc / (0.5 * dx2);
         }
     } else if (solved_comp == E_ID || solved_comp == EEN_ID)
     {
@@ -181,7 +185,7 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
 
             flx -= gama * (ARp_flux + AR2p_flux); // net outward flux
         }
-        rhs(intcell, rhs_comp) -= bscalar*flx / dx[dir];
+        rhs(intcell, rhs_comp) -= bscalar * flx / dx[dir];
     } else if (solved_comp == ARp_ID || solved_comp == AR2p_ID)
     {
         amrex::Real efieldmag = std::sqrt(
@@ -197,12 +201,12 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
         amrex::Real flx =
             (ion_drift_flux_dotn >= 0.0) ? ion_drift_flux_dotn : 0.0;
 
-        rhs(intcell, rhs_comp) -= bscalar*flx / dx[dir];
+        rhs(intcell, rhs_comp) -= bscalar * flx / dx[dir];
     } else if (solved_comp == ARm_ID || solved_comp == AR2m_ID)
     {
         amrex::Real cbar = sqrt(8.0 * K_B * Tg / PI * imw(solved_comp));
         amrex::Real flx = sb_arr(intcell, solved_comp) * cbar / 4.0;
-        rhs(intcell, rhs_comp) -= bscalar*flx / dx[dir];
+        rhs(intcell, rhs_comp) -= bscalar * flx / dx[dir];
     } else
     {
         // zero flux

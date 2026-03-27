@@ -85,12 +85,16 @@ public:
         Vector<int>& bc_hi,
         Real time);
 
-    void fill_sborder(amrex::Vector<amrex::MultiFab> &Sborder, 
-            amrex::Real cur_time, amrex::Real dt_common);
+    void fill_sborder(
+        amrex::Vector<amrex::MultiFab>& Sborder,
+        amrex::Real cur_time,
+        amrex::Real dt_common);
 
-    void solve_three_term_photoionization(amrex::Vector<amrex::MultiFab> &Sborder,
-                                          amrex::Vector<amrex::MultiFab> &rxn_src,
-                                           amrex::Real cur_time,amrex::Real time_offset);
+    void solve_three_term_photoionization(
+        amrex::Vector<amrex::MultiFab>& Sborder,
+        amrex::Vector<amrex::MultiFab>& rxn_src,
+        amrex::Real cur_time,
+        amrex::Real time_offset);
 
     void compute_axisym_correction(
         int startspec,
@@ -111,61 +115,61 @@ public:
         Real dt);
 
     void solve_potential(
-            Real current_time,
-            Vector<MultiFab>& Sborder,
-            Vector<MultiFab>& Sborder_old,
-            Vector<int>& bc_lo,
-            Vector<int>& bc_hi,
-            Vector<Array<MultiFab, 
-            AMREX_SPACEDIM>>& efield_ec,
-            int electron_poisson_coupling,amrex::Real dt_global,
-            amrex::Vector<MultiFab>& ephi_src);
+        Real current_time,
+        Vector<MultiFab>& Sborder,
+        Vector<MultiFab>& Sborder_old,
+        Vector<int>& bc_lo,
+        Vector<int>& bc_hi,
+        Vector<Array<MultiFab, AMREX_SPACEDIM>>& efield_ec,
+        int electron_poisson_coupling,
+        amrex::Real dt_global,
+        amrex::Vector<MultiFab>& ephi_src);
 
     void update_explsrc_at_all_levels(
-            int startspec,
-            int numspec,
-            Vector<MultiFab>& Sborder,
-            Vector<MultiFab>& rxn_src,
-            Vector<MultiFab>& expl_src,
-            Vector<int>& bc_lo,
-            Vector<int>& bc_hi,
-            amrex::Real cur_time);
+        int startspec,
+        int numspec,
+        Vector<MultiFab>& Sborder,
+        Vector<MultiFab>& rxn_src,
+        Vector<MultiFab>& expl_src,
+        Vector<int>& bc_lo,
+        Vector<int>& bc_hi,
+        amrex::Real cur_time);
 
     void update_rxnsrc_at_all_levels(
-            Vector<MultiFab>& Sborder,
-            Vector<MultiFab>& rxn_src,
-            amrex::Real cur_time);
+        Vector<MultiFab>& Sborder,
+        Vector<MultiFab>& rxn_src,
+        amrex::Real cur_time);
 
     void implicit_solve_scalar(
-            Real current_time,
-            Real dt,
-            int startspec,
-            int numspec,
-            Vector<MultiFab>& Sborder,
-            Vector<MultiFab>& Sborder_old,
-            Vector<MultiFab>& dsdt_expl,
-            Vector<int>& bc_lo,
-            Vector<int>& bc_hi,
-            Vector<Array<MultiFab, AMREX_SPACEDIM>>& grad_fc);
+        Real current_time,
+        Real dt,
+        int startspec,
+        int numspec,
+        Vector<MultiFab>& Sborder,
+        Vector<MultiFab>& Sborder_old,
+        Vector<MultiFab>& dsdt_expl,
+        Vector<int>& bc_lo,
+        Vector<int>& bc_hi,
+        Vector<Array<MultiFab, AMREX_SPACEDIM>>& grad_fc);
 
     void solve_photoionization(
-            Real current_time,
-            Vector<MultiFab>& Sborder,
-            Vector<int>& bc_lo,
-            Vector<int>& bc_hi,
-            Vector<MultiFab>& photoion_src,
-            int sph_id);
+        Real current_time,
+        Vector<MultiFab>& Sborder,
+        Vector<int>& bc_lo,
+        Vector<int>& bc_hi,
+        Vector<MultiFab>& photoion_src,
+        int sph_id);
 
     void compute_elecenergy_source(
-            int lev,
-            MultiFab& Sborder,
-            MultiFab& rxnsrc,
-            Array<MultiFab, AMREX_SPACEDIM>& efield,
-            Array<MultiFab, AMREX_SPACEDIM>& gradne,
-            MultiFab& dsdt,
-            Real time,
-            Real dt,
-            int floor_jh);
+        int lev,
+        MultiFab& Sborder,
+        MultiFab& rxnsrc,
+        Array<MultiFab, AMREX_SPACEDIM>& efield,
+        Array<MultiFab, AMREX_SPACEDIM>& gradne,
+        MultiFab& dsdt,
+        Real time,
+        Real dt,
+        int floor_jh);
 
     void compute_electemp_lfa(int lev, MultiFab& Sborder, amrex::Real time);
 
@@ -174,17 +178,17 @@ public:
     void compute_integrated_currents();
 
     void compute_current_density_at_level(
-            int lev,
-            MultiFab& Sborder,
-            Array<MultiFab, AMREX_SPACEDIM>& ecurrden,
-            Array<MultiFab, AMREX_SPACEDIM>& icurrden);
+        int lev,
+        MultiFab& Sborder,
+        Array<MultiFab, AMREX_SPACEDIM>& ecurrden,
+        Array<MultiFab, AMREX_SPACEDIM>& icurrden);
 
     // compute dt from CFL considerations
     void find_time_scales(
-            int lev,
-            amrex::Real& dt_edrift,
-            amrex::Real& dt_ediff,
-            amrex::Real& dt_diel_relax);
+        int lev,
+        amrex::Real& dt_edrift,
+        amrex::Real& dt_ediff,
+        amrex::Real& dt_diel_relax);
 
     static ProbParm* h_prob_parm;
     static ProbParm* d_prob_parm;
@@ -254,8 +258,8 @@ public:
     amrex::Real dt_max = 1e-9;
     amrex::Real adaptive_dt_delay = 0.0;
     amrex::Real dt_stretch = std::numeric_limits<amrex::Real>::max();
-    int electron_poisson_coupling=0;
-    int electron_poisson_maxiters=1;
+    int electron_poisson_coupling = 0;
+    int electron_poisson_maxiters = 1;
 
     amrex::Real linsolve_reltol = 1e-10;
     amrex::Real linsolve_abstol = 1e-10;

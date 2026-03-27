@@ -808,9 +808,9 @@ void Vidyut::implicit_solve_scalar(
                  specid++)
             {
                 set_explicit_fluxes_at_ib(
-                    ilev, ascalar, bscalar, rhs[ilev], acoeff[ilev], bcoeff[ilev], 
-                    Sborder[ilev], current_time,
-                    specid, specid - startspec);
+                    ilev, ascalar, bscalar, rhs[ilev], acoeff[ilev],
+                    bcoeff[ilev], Sborder[ilev], current_time, specid,
+                    specid - startspec);
             }
         }
 

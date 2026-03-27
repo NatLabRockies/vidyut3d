@@ -226,7 +226,7 @@ void Vidyut::solve_photoionization(
 
         rhs[ilev].setVal(0.0);
 
-        //FIXME:need to make this general
+        // FIXME:need to make this general
         acoeff[ilev].setVal(amrex::Math::powi<2>(lambda_j[sph_id] * pO2));
         bcoeff[ilev].setVal(1.0);
 
@@ -400,8 +400,7 @@ void Vidyut::solve_photoionization(
             null_bcoeff_at_ib(ilev, face_bcoeff, Sborder[ilev], 1);
             set_explicit_fluxes_at_ib(
                 ilev, ascalar, bscalar, rhs[ilev], acoeff[ilev], bcoeff[ilev],
-                Sborder[ilev], current_time,
-                PHOTO_ION_SRC_ID, 0);
+                Sborder[ilev], current_time, PHOTO_ION_SRC_ID, 0);
         }
 
         linsolve_ptr->setACoeffs(ilev, acoeff[ilev]);
