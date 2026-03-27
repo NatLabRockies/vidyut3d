@@ -60,7 +60,10 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     int solved_comp,
     int rhs_comp,
     Array4<Real> const& sb_arr,
+    amrex::Real ascalar,
+    amrex::Real bscalar,
     Array4<Real> const& acoeff,
+    Array4<Real> const& bcoeff,
     Array4<Real> const& rhs,
     GpuArray<int, AMREX_SPACEDIM> domlo,
     GpuArray<int, AMREX_SPACEDIM> domhi,
@@ -104,8 +107,8 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
         // Dirichlet condition works out to the same sign
         int left_side = (xloc < midx) ? 1 : 0;
         amrex::Real phi_dirc =
-            (left_side) ? prob_parm.V1 * std::sin(2.0 * PI * prob_parm.f * time)
-                        : prob_parm.V2;
+        (left_side) ? prob_parm.V1 * std::sin(2.0 * PI * prob_parm.f * time)
+        : prob_parm.V2;
         acoeff(intcell) -= 1.0 / (0.5 * dx2);
         rhs(intcell, rhs_comp) -= phi_dirc / (0.5 * dx2);
     } else if (solved_comp == E_ID || solved_comp == EEN_ID)
@@ -137,7 +140,7 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
         amrex::Real ion_drift_flux = mu * sb_arr(intcell, solved_comp) * efield;
         amrex::Real ion_drift_flux_dotn = ion_drift_flux * outward_normal[dir];
         amrex::Real flx =
-            (ion_drift_flux_dotn >= 0.0) ? ion_drift_flux_dotn : 0.0;
+        (ion_drift_flux_dotn >= 0.0) ? ion_drift_flux_dotn : 0.0;
 
         rhs(intcell, rhs_comp) -= flx / dx[dir];
     } else if (solved_comp == HEm_ID || solved_comp == HE2m_ID)
