@@ -85,6 +85,17 @@ public:
         Vector<int>& bc_hi,
         Real time);
 
+    void fill_sborder(
+        amrex::Vector<amrex::MultiFab>& Sborder,
+        amrex::Real cur_time,
+        amrex::Real dt_common);
+
+    void solve_three_term_photoionization(
+        amrex::Vector<amrex::MultiFab>& Sborder,
+        amrex::Vector<amrex::MultiFab>& rxn_src,
+        amrex::Real cur_time,
+        amrex::Real time_offset);
+
     void compute_axisym_correction(
         int startspec,
         int numspec,
@@ -106,9 +117,13 @@ public:
     void solve_potential(
         Real current_time,
         Vector<MultiFab>& Sborder,
+        Vector<MultiFab>& Sborder_old,
         Vector<int>& bc_lo,
         Vector<int>& bc_hi,
-        Vector<Array<MultiFab, AMREX_SPACEDIM>>& efield_ec);
+        Vector<Array<MultiFab, AMREX_SPACEDIM>>& efield_ec,
+        int electron_poisson_coupling,
+        amrex::Real dt_global,
+        amrex::Vector<MultiFab>& ephi_src);
 
     void update_explsrc_at_all_levels(
         int startspec,
@@ -243,6 +258,8 @@ public:
     amrex::Real dt_max = 1e-9;
     amrex::Real adaptive_dt_delay = 0.0;
     amrex::Real dt_stretch = std::numeric_limits<amrex::Real>::max();
+    int electron_poisson_coupling = 0;
+    int electron_poisson_maxiters = 1;
 
     amrex::Real linsolve_reltol = 1e-10;
     amrex::Real linsolve_abstol = 1e-10;
@@ -309,8 +326,11 @@ public:
 
     void set_explicit_fluxes_at_ib(
         int lev,
+        amrex::Real ascalar,
+        amrex::Real bscalar,
         MultiFab& rhs,
         MultiFab& acoeff,
+        MultiFab& bcoeff,
         MultiFab& Sborder,
         Real time,
         int compid,

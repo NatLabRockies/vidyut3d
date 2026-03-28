@@ -82,11 +82,9 @@ void Vidyut::solve_photoionization(
     lambda_j[0] = 0.0553 / ((cm_to_m) * (Torr_to_Pa));
 
     A_j[1] = 0.0051 / ((cm_to_m * cm_to_m) * (Torr_to_Pa * Torr_to_Pa));
-    ;
     lambda_j[1] = 0.1460 / ((cm_to_m) * (Torr_to_Pa));
 
     A_j[2] = 0.4886 / ((cm_to_m * cm_to_m) * (Torr_to_Pa * Torr_to_Pa));
-    ;
     lambda_j[2] = 0.89 / ((cm_to_m) * (Torr_to_Pa));
 
 #ifdef AMREX_USE_HYPRE
@@ -165,6 +163,7 @@ void Vidyut::solve_photoionization(
 
     // Vector<MultiFab> photoionization_src(finest_level+1);
     Vector<MultiFab> acoeff(finest_level + 1);
+    Vector<MultiFab> bcoeff(finest_level + 1);
     Vector<MultiFab> solution(finest_level + 1);
     Vector<MultiFab> rhs(finest_level + 1);
 
@@ -179,6 +178,7 @@ void Vidyut::solve_photoionization(
     {
         photoionization_src[ilev].define(grids[ilev], dmap[ilev], 1, num_grow);
         acoeff[ilev].define(grids[ilev], dmap[ilev], 1, num_grow);
+        bcoeff[ilev].define(grids[ilev], dmap[ilev], 1, num_grow);
         solution[ilev].define(grids[ilev], dmap[ilev], 1, num_grow);
         rhs[ilev].define(grids[ilev], dmap[ilev], 1, num_grow);
 
@@ -225,7 +225,10 @@ void Vidyut::solve_photoionization(
         solution[ilev].setVal(0.0);
 
         rhs[ilev].setVal(0.0);
+
+        // FIXME:need to make this general
         acoeff[ilev].setVal(amrex::Math::powi<2>(lambda_j[sph_id] * pO2));
+        bcoeff[ilev].setVal(1.0);
 
         // default to homogenous Nuemann // Dirichlet
         robin_a[ilev].setVal(0.0);
@@ -396,8 +399,8 @@ void Vidyut::solve_photoionization(
         {
             null_bcoeff_at_ib(ilev, face_bcoeff, Sborder[ilev], 1);
             set_explicit_fluxes_at_ib(
-                ilev, rhs[ilev], acoeff[ilev], Sborder[ilev], current_time,
-                PHOTO_ION_SRC_ID, 0);
+                ilev, ascalar, bscalar, rhs[ilev], acoeff[ilev], bcoeff[ilev],
+                Sborder[ilev], current_time, PHOTO_ION_SRC_ID, 0);
         }
 
         linsolve_ptr->setACoeffs(ilev, acoeff[ilev]);
@@ -445,6 +448,7 @@ void Vidyut::solve_photoionization(
     //  photoionization_src.clear();
 
     acoeff.clear();
+    bcoeff.clear();
     solution.clear();
     rhs.clear();
     solvemask.clear();
