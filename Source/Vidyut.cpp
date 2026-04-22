@@ -16,6 +16,7 @@
 #include <UserFunctions.H>
 #include <HelperFuncs.H>
 
+
 using namespace amrex;
 
 ProbParm* Vidyut::h_prob_parm = nullptr;
@@ -873,10 +874,14 @@ void Vidyut::interpolate_fields_ib(
                         (statefab(iv, CMASK_ID) > 1e-16))
                     {
                         amrex::Real xib[AMREX_SPACEDIM];
-                        user_transport::get_surface_point(
-                            iv, prob_lo, prob_hi, domlo, domhi, dx,
-                            *localprobparm, xib);
-
+                        // user_transport::get_surface_point(
+                        //     iv, prob_lo, prob_hi, domlo, domhi, dx,
+                        //     *localprobparm, xib);
+                        xib[0] = statefab(iv, CPX_ID); // EB centroid x
+                        xib[1] = statefab(iv, CPY_ID); // EB centroid y
+#if (AMREX_SPACEDIM == 3)
+                        xib[2] = statefab(iv, CPZ_ID); // EB centroid z
+#endif
                         const amrex::Real xi =
                             (xib[0] - (prob_lo[0] + iv[0] * dx[0])) / dx[0];
                         const amrex::Real yi =
