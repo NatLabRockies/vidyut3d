@@ -140,40 +140,51 @@ void init_level_with_eb(
     const Real outer_r = prob_parm->outer_radius;
 
     if (!EB2::IndexSpace::empty()) EB2::IndexSpace::clear();
-    ParmParse pp("eb2");
-    std::string geom;
-    pp.query("geom_type", geom);
+    ParmParse pp_vidyut("vidyut");
+    bool primitive_shape = false;
+    pp_vidyut.query("primitive_shape", primitive_shape);
 
-    if (geom == "annulus")
+    if (primitive_shape)
     {
-        amrex::Real inner_r, outer_r, height;
-        int axis;
-        amrex::Vector<amrex::Real> ctr_vec;
-        amrex::RealArray ctr;
-        pp.get("inner_r", inner_r);
-        pp.get("outer_r", outer_r);
-        pp.get("height", height);
-        pp.get("axis", axis);
-        pp.getarr("center", ctr_vec);
-        if (pp.queryarr("center", ctr_vec))
-        {
-            for (int i = 0; i < AMREX_SPACEDIM; ++i)
-            {
-                ctr[i] = ctr_vec[i];
-            }
-        }
-        EB2::CylinderIF inner_cyl(inner_r, height, axis, ctr, false);
-        EB2::CylinderIF outer_cyl(outer_r, height, axis, ctr, true);
-
-        auto shape = EB2::makeUnion(inner_cyl, outer_cyl);
-        auto shop = EB2::makeShop(shape);
-
-        EB2::Build(shop, gm, 0, 0);
+        EB2::Build(gm, 0, 10);
     } else
     {
-        amrex::Abort("Unknown geometry type");
-    }
+        ParmParse pp("eb2");
+        std::string geom;
+        pp.query("geom_type", geom);
 
+        if (geom == "annulus")
+        {
+            amrex::Real inner_r, outer_r, height;
+            int axis;
+            amrex::Vector<amrex::Real> ctr_vec;
+            amrex::RealArray ctr;
+            pp.get("inner_r", inner_r);
+            pp.get("outer_r", outer_r);
+            pp.get("height", height);
+            pp.get("axis", axis);
+            pp.getarr("center", ctr_vec);
+            if (pp.queryarr("center", ctr_vec))
+            {
+                for (int i = 0; i < AMREX_SPACEDIM; ++i)
+                {
+                    ctr[i] = ctr_vec[i];
+                }
+            }
+            EB2::CylinderIF inner_cyl(inner_r, height, axis, ctr, false);
+            EB2::CylinderIF outer_cyl(outer_r, height, axis, ctr, true);
+
+            auto shape = EB2::makeUnion(inner_cyl, outer_cyl);
+            auto shop = EB2::makeShop(shape);
+
+            EB2::Build(shop, gm, 0, 10);
+        }
+
+        else
+        {
+            amrex::Abort("Unknown geometry type");
+        }
+    }
     // #if (AMREX_SPACEDIM == 2)
     //     EB2::CylinderIF inner_cyl(inner_r, 20, 2,center, false);
     //     EB2::CylinderIF outer_cyl(outer_r, 20, 2,center, true);
