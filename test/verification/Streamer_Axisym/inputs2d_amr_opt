@@ -1,12 +1,12 @@
 max_step  = 20000000
-stop_time = 1.6e-8
+stop_time = 1.62e-8
 
 # PROBLEM SIZE & GEOMETRY
 geometry.is_periodic =  0  0  1
 geometry.coord_sys   =  1       # 0 => cart, 1 => RZ (axisymmetric)
 geometry.prob_lo     =  0.0     0.0     0.0 
 geometry.prob_hi     =  0.0125   0.0125 3.90625e-4
-amr.n_cell           =   256 256 4
+amr.n_cell           =   512  512  4
 
 # VERBOSITY
 amr.v              = 1       # verbosity in Amr
@@ -16,13 +16,17 @@ amr.v              = 1       # verbosity in Amr
 
 # REFINEMENT
 amr.max_level       = 4       # maximum level number allowed
-amr.blocking_factor = 128       # block factor in grid generation
-amr.max_grid_size   = 2048
+amr.blocking_factor = 128      # block factor in grid generation
+amr.max_grid_size   = 4096
 
 amr.regrid_int      = 5       # how often to regrid
 
 # TIME STEP CONTROL
-vidyut.dt             = 1e-12
+vidyut.dt             = 2e-12
+vidyut.adaptive_dt    = 1
+vidyut.advective_cfl  = 0.5
+vidyut.diffusive_cfl  = 10.0
+vidyut.dielectric_cfl = 1.0
 vidyut.num_timestep_correctors = 2
 vidyut.hyp_order = 5
 
@@ -67,11 +71,12 @@ vidyut.neutral_bc_hi = 2 2 0
 
 # PLOTFILES
 amr.plot_file  = plt    # root name of plot file
-amr.plot_int   = 1000     # number of timesteps between plot files
+amr.plot_int   = -1     # number of timesteps between plot files
+amr.plot_time   = 1e-9     # number of timesteps between plot files
 
 # CHECKPOINT
 amr.chk_file = chk      # root name of checkpoint file
-amr.chk_int  = 1000      # number of timesteps between checkpoint files
+amr.chk_int  = -1      # number of timesteps between checkpoint files
 
 vidyut.bound_specden=1
 vidyut.min_species_density=1e0

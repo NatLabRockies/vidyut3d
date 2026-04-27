@@ -1,5 +1,5 @@
 max_step  = 20000000
-stop_time = 2e-8
+stop_time = 1.6e-8
 
 # PROBLEM SIZE & GEOMETRY
 geometry.is_periodic =  0  0  1
@@ -22,7 +22,7 @@ amr.max_grid_size   = 64
 amr.regrid_int      = 5       # how often to regrid
 
 # TIME STEP CONTROL
-vidyut.dt             = 1e-13
+vidyut.dt             = 1e-12
 vidyut.num_timestep_correctors = 2
 vidyut.hyp_order = 5
 
@@ -74,7 +74,7 @@ vidyut.photoion_bc_hi = 2 1 0
 
 # PLOTFILES
 amr.plot_file  = plt    # root name of plot file
-amr.plot_int   = 2000     # number of timesteps between plot files
+amr.plot_int   = 1000     # number of timesteps between plot files
 
 # CHECKPOINT
 amr.chk_file = chk      # root name of checkpoint file
