@@ -54,6 +54,14 @@ Vidyut::Vidyut()
     plasma_param_names[19] = "Dcurden_X";
     plasma_param_names[20] = "Dcurden_Y";
     plasma_param_names[21] = "Dcurden_Z";
+#ifdef AMREX_USE_EB
+    plasma_param_names[22] = "EB_cp_x";
+    plasma_param_names[23] = "EB_cp_y";
+    plasma_param_names[24] = "EB_cp_z";
+    plasma_param_names[25] = "EB_norm_x";
+    plasma_param_names[26] = "EB_norm_y";
+    plasma_param_names[27] = "EB_norm_z";
+#endif
 
     allvarnames.resize(NVAR);
     for (int i = 0; i < NUM_SPECIES; i++)
@@ -871,10 +879,14 @@ void Vidyut::interpolate_fields_ib(
                         (statefab(iv, CMASK_ID) > 1e-16))
                     {
                         amrex::Real xib[AMREX_SPACEDIM];
-                        user_transport::get_surface_point(
-                            iv, prob_lo, prob_hi, domlo, domhi, dx,
-                            *localprobparm, xib);
-
+                        // user_transport::get_surface_point(
+                        //     iv, prob_lo, prob_hi, domlo, domhi, dx,
+                        //     *localprobparm, xib);
+                        xib[0] = statefab(iv, CPX_ID); // EB centroid x
+                        xib[1] = statefab(iv, CPY_ID); // EB centroid y
+#if (AMREX_SPACEDIM == 3)
+                        xib[2] = statefab(iv, CPZ_ID); // EB centroid z
+#endif
                         const amrex::Real xi =
                             (xib[0] - (prob_lo[0] + iv[0] * dx[0])) / dx[0];
                         const amrex::Real yi =

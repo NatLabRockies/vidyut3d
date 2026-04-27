@@ -24,7 +24,17 @@
 #define DCURX_ID (NUM_SPECIES + 19)
 #define DCURY_ID (NUM_SPECIES + 20)
 #define DCURZ_ID (NUM_SPECIES + 21)
+#ifdef AMREX_USE_EB
+#define CPX_ID (NUM_SPECIES + 22)
+#define CPY_ID (NUM_SPECIES + 23)
+#define CPZ_ID (NUM_SPECIES + 24)
+#define NX_ID (NUM_SPECIES + 25)
+#define NY_ID (NUM_SPECIES + 26)
+#define NZ_ID (NUM_SPECIES + 27)
+#define NUM_PLASMAVARS (NZ_ID - NUM_SPECIES + 1)
+#else
 #define NUM_PLASMAVARS (DCURZ_ID - NUM_SPECIES + 1)
+#endif
 #define NVAR (NUM_SPECIES + NUM_PLASMAVARS)
 
 #define PERBC 0

@@ -5,6 +5,7 @@
 #include <AMReX_PlotFileUtil.H>
 #include <AMReX_VisMF.H>
 #include <AMReX_PhysBCFunct.H>
+
 #include <Prob.H>
 #include <Tagging.H>
 #include <BCFill.H>
@@ -68,6 +69,7 @@ void Vidyut::MakeNewLevelFromScratch(
     int lev, Real time, const BoxArray& ba, const DistributionMapping& dm)
 {
     BL_PROFILE("vidyut::MakeNewLevelFromScratch()");
+
     const int nghost = 0;
     int ncomp = NVAR;
 
@@ -77,12 +79,20 @@ void Vidyut::MakeNewLevelFromScratch(
     t_new[lev] = time;
     t_old[lev] = time - 1.e200;
 
-    Real cur_time = t_new[lev];
     MultiFab& state = phi_new[lev];
     state.setVal(0.0);
 
+    // Problem parameters on device were initialized in amrex_probinit(...)
     ProbParm* localprobparm = d_prob_parm;
 
+#ifdef AMREX_USE_EB
+    // Conditionally build EB depending on user request in d_prob_parm
+    if (localprobparm->enable_EB)
+    {
+        // User requested EB: build EB and initialize masks from EB vfrac
+        init_level_with_eb(ba, dm, geom[lev], state, localprobparm);
+    }
+#endif
     for (MFIter mfi(state); mfi.isValid(); ++mfi)
     {
         Array4<Real> fab = state[mfi].array();
@@ -94,6 +104,7 @@ void Vidyut::MakeNewLevelFromScratch(
         });
     }
 
+    // copy new -> old
     amrex::MultiFab::Copy(phi_old[lev], phi_new[lev], 0, 0, ncomp, 0);
 }
 
@@ -133,12 +144,16 @@ void Vidyut::FillPatch(int lev, Real time, MultiFab& mf, int icomp, int ncomp)
         GpuBndryFuncFab<AmrCoreFill> gpu_bndry_func(amrcore_fill_func);
         PhysBCFunct<GpuBndryFuncFab<AmrCoreFill>> physbc(
             geom[lev], bcspec, gpu_bndry_func);
+
         amrex::FillPatchSingleLevel(
             mf, time, smf, stime, 0, icomp, ncomp, geom[lev], physbc, 0);
+
     } else
     {
+
         Vector<MultiFab*> cmf, fmf;
         Vector<Real> ctime, ftime;
+
         GetData(lev - 1, time, cmf, ctime);
         GetData(lev, time, fmf, ftime);
 
@@ -168,6 +183,7 @@ void Vidyut::FillCoarsePatch(
     Vector<MultiFab*> cmf;
     Vector<Real> ctime;
     GetData(lev - 1, time, cmf, ctime);
+
     Interpolater* mapper = &cell_cons_interp;
 
     if (cmf.size() != 1)
