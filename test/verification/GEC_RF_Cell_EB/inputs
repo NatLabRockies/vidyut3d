@@ -3,7 +3,7 @@ stop_time = 100e-5 #1000 rf cycles
 
 # PROBLEM SIZE & GEOMETRY
 geometry.is_periodic =  0  0  1
-geometry.coord_sys   =  1       # 0 => cart
+geometry.coord_sys   =  1     # 0 => cart
 geometry.prob_lo     =  0.0    -0.0508     0.0 
 geometry.prob_hi     =  0.1016  0.0508    0.001
 amr.n_cell           =   256 256  4
@@ -26,6 +26,23 @@ vidyut.user_defined_species = 1
 vidyut.user_defined_vel = 1
 vidyut.num_timestep_correctors=1
 vidyut.using_ib=1
+
+
+
+# EB Cylinder Definitions
+vidyut.primitive_shape = 1
+# ---------------------------------------------------------
+# EB2 Geometry Configuration
+# ---------------------------------------------------------
+eb2.geom_type = box
+# Cylinder of radius 0.0508, from bottom of domain to Z=0
+eb2.box_lo = 0.0    -0.0508  -1.0
+eb2.box_hi = 0.0508  0.0       1.0
+eb2.box_has_fluid_inside = 0
+
+# Ensure the solver knows to use EB
+amrex.verbose = 2              # Increase verbosity to see EB info in stdout
+amrex.eb2_verbose = 3            # EB-specific verbosity
 
 # Tagging
 vidyut.tagged_vars = Potential 
