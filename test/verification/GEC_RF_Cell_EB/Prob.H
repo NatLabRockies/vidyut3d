@@ -157,10 +157,10 @@ void init_level_with_eb(
             const Real* prob_hi = gm.ProbHi();
             EB2::BoxIF lower_electrode(
                 {AMREX_D_DECL(prob_lo[0], prob_lo[1], prob_lo[2])},
-                {AMREX_D_DECL(R1, -halfgap, prob_hi[2])}, true);
+                {AMREX_D_DECL(R1, -halfgap, prob_hi[2])}, false);
             EB2::BoxIF upper_electrode(
                 {AMREX_D_DECL(prob_lo[0], halfgap, prob_lo[2])},
-                {AMREX_D_DECL(R1, prob_hi[1], prob_hi[2])}, true);
+                {AMREX_D_DECL(R1, prob_hi[1], prob_hi[2])}, false);
             auto gec_solid = EB2::makeUnion(lower_electrode, upper_electrode);
             auto gshop = EB2::makeShop(gec_solid);
             EB2::Build(gshop, gm, 0, 10);
@@ -227,60 +227,60 @@ void init_level_with_eb(
     cp_mf.FillBoundary(gm.periodicity());
     nrm_mf.FillBoundary(gm.periodicity());
 
-//     // PASS 2: Fluid neighbors inherit geometric data
-//     for (MFIter mfi(state); mfi.isValid(); ++mfi)
-//     {
-//         const Box& bx = mfi.tilebox();
-//         auto const& flagfab = flags[mfi].const_array();
-//         auto cp_arr = cp_mf.array(mfi);
-//         auto nrm_arr = nrm_mf.array(mfi);
+    // PASS 2: Fluid neighbors inherit geometric data
+    for (MFIter mfi(state); mfi.isValid(); ++mfi)
+    {
+        const Box& bx = mfi.tilebox();
+        auto const& flagfab = flags[mfi].const_array();
+        auto cp_arr = cp_mf.array(mfi);
+        auto nrm_arr = nrm_mf.array(mfi);
 
-//         amrex::ParallelFor(
-//             bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-//                 if (flagfab(i, j, k).isRegular())
-//                 {
-//                     Real cell_center[3] = {
-//                         plo[0] + (i + 0.5) * dx[0], plo[1] + (j + 0.5) * dx[1],
-//                         0.0};
-// #if (AMREX_SPACEDIM == 3)
-//                     cell_center[2] = plo[2] + (k + 0.5) * dx[2];
-// #endif
-//                     Real best_d2 = 1e30;
-//                     for (int nk = -1; nk <= 1; ++nk)
-//                     {
-//                         for (int nj = -1; nj <= 1; ++nj)
-//                         {
-//                             for (int ni = -1; ni <= 1; ++ni)
-//                             {
-//                                 if (flagfab(i + ni, j + nj, k + nk)
-//                                         .isSingleValued())
-//                                 {
-//                                     Real d2 = 0;
-//                                     for (int n = 0; n < AMREX_SPACEDIM; ++n)
-//                                     {
-//                                         Real diff =
-//                                             cp_arr(i + ni, j + nj, k + nk, n) -
-//                                             cell_center[n];
-//                                         d2 += diff * diff;
-//                                     }
-//                                     if (d2 < best_d2)
-//                                     {
-//                                         best_d2 = d2;
-//                                         for (int n = 0; n < AMREX_SPACEDIM; ++n)
-//                                         {
-//                                             cp_arr(i, j, k, n) = cp_arr(
-//                                                 i + ni, j + nj, k + nk, n);
-//                                             nrm_arr(i, j, k, n) = nrm_arr(
-//                                                 i + ni, j + nj, k + nk, n);
-//                                         }
-//                                     }
-//                                 }
-//                             }
-//                         }
-//                     }
-//                 }
-//             });
-//     }
+        amrex::ParallelFor(
+            bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+                if (flagfab(i, j, k).isRegular())
+                {
+                    Real cell_center[3] = {
+                        plo[0] + (i + 0.5) * dx[0], plo[1] + (j + 0.5) * dx[1],
+                        0.0};
+#if (AMREX_SPACEDIM == 3)
+                    cell_center[2] = plo[2] + (k + 0.5) * dx[2];
+#endif
+                    Real best_d2 = 1e30;
+                    for (int nk = -1; nk <= 1; ++nk)
+                    {
+                        for (int nj = -1; nj <= 1; ++nj)
+                        {
+                            for (int ni = -1; ni <= 1; ++ni)
+                            {
+                                if (flagfab(i + ni, j + nj, k + nk)
+                                        .isSingleValued())
+                                {
+                                    Real d2 = 0;
+                                    for (int n = 0; n < AMREX_SPACEDIM; ++n)
+                                    {
+                                        Real diff =
+                                            cp_arr(i + ni, j + nj, k + nk, n) -
+                                            cell_center[n];
+                                        d2 += diff * diff;
+                                    }
+                                    if (d2 < best_d2)
+                                    {
+                                        best_d2 = d2;
+                                        for (int n = 0; n < AMREX_SPACEDIM; ++n)
+                                        {
+                                            cp_arr(i, j, k, n) = cp_arr(
+                                                i + ni, j + nj, k + nk, n);
+                                            nrm_arr(i, j, k, n) = nrm_arr(
+                                                i + ni, j + nj, k + nk, n);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+    }
 
     // Final Initialization
     for (MFIter mfi(state); mfi.isValid(); ++mfi)

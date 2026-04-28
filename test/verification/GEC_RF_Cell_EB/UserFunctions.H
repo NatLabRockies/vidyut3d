@@ -86,11 +86,39 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     amrex::Real midy = 0.5 * (prob_lo[1] + prob_hi[1]);
 
     // interior cell
-    IntVect intcell = (sgn == 1) ? lcell : rcell;
-    amrex::Real outward_normal[AMREX_SPACEDIM] = {0.0};
-    outward_normal[dir] = sgn;
-    amrex::Real dx2 = dx[dir] * dx[dir];
+    //IntVect intcell = (sgn == 1) ? lcell : rcell;
+    //amrex::Real outward_normal[AMREX_SPACEDIM] = {0.0};
+    //outward_normal[dir] = sgn;
+    amrex::Real vf_l = sb_arr(lcell, CMASK_ID);
+    amrex::Real vf_r = sb_arr(rcell, CMASK_ID);
 
+    IntVect intcell = (vf_l >= vf_r) ? lcell : rcell;
+    IntVect cutcell = (vf_l < vf_r) ? lcell : rcell;
+    //amrex::Real dx2 = dx[dir] * dx[dir];
+    amrex::Real outward_normal[AMREX_SPACEDIM];
+    // read EB normal from the cut cell
+    amrex::Real nx = sb_arr(cutcell, NX_ID);
+    amrex::Real ny = sb_arr(cutcell, NY_ID);
+#if (AMREX_SPACEDIM == 3)
+    amrex::Real nz = sb_arr(cutcell, NZ_ID);
+#endif
+#if (AMREX_SPACEDIM == 3)
+    amrex::Real nz = sb_arr(cutcell, NZ_ID);
+#endif
+
+    // helper lambda to convert real normal to {-1, 0, +1}
+    auto sgn3 = [](amrex::Real v) -> amrex::Real {
+        if (v > 1e-12) return 1.0;
+        if (v < -1e-12) return -1.0;
+        return 0.0;
+    };
+
+    outward_normal[0] = sgn3(nx);
+    outward_normal[1] = sgn3(ny);
+#if (AMREX_SPACEDIM == 3)
+    outward_normal[2] = sgn3(nz);
+#endif
+    amrex::Real dx2 = dx[dir] * dx[dir];
     amrex::Real ndens = 0.0;
     for (int sp = 0; sp < NUM_SPECIES; sp++) ndens += sb_arr(intcell, sp);
 
