@@ -85,14 +85,6 @@ void Vidyut::MakeNewLevelFromScratch(
     // Problem parameters on device were initialized in amrex_probinit(...)
     ProbParm* localprobparm = d_prob_parm;
 
-#ifdef AMREX_USE_EB
-    // Conditionally build EB depending on user request in d_prob_parm
-    if (localprobparm->enable_EB)
-    {
-        // User requested EB: build EB and initialize masks from EB vfrac
-        init_level_with_eb(ba, dm, geom[lev], state, localprobparm);
-    }
-#endif
     for (MFIter mfi(state); mfi.isValid(); ++mfi)
     {
         Array4<Real> fab = state[mfi].array();
@@ -103,6 +95,16 @@ void Vidyut::MakeNewLevelFromScratch(
             initdomaindata(tbx, fab, geomData, localprobparm);
         });
     }
+#ifdef AMREX_USE_EB
+    // Conditionally build EB depending on user request in d_prob_parm.
+    // Must run after initdomaindata so that CMASK_ID set here is not
+    // overwritten by initdomaindata setting all cells to 1.
+    if (localprobparm->enable_EB)
+    {
+        // User requested EB: build EB and initialize masks from EB vfrac
+        init_level_with_eb(ba, dm, geom[lev], state, localprobparm);
+    }
+#endif
 
     // copy new -> old
     amrex::MultiFab::Copy(phi_old[lev], phi_new[lev], 0, 0, ncomp, 0);
