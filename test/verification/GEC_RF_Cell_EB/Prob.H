@@ -148,9 +148,31 @@ void init_level_with_eb(
         EB2::Build(gm, 0, 10);
     } else
     {
-        //amrex::Abort("Unknown geometry type");
-        amrex::Print() << "No geometry specified, defaulting to primitive shape (full domain)" << std::endl;
-        return ;
+        ParmParse pp("eb2");
+        std::string geom;
+        pp.query("geom_type", geom);
+
+        if (geom == "gec")
+        {
+            amrex::Real R1 = prob_parm->R1;
+            amrex::Real halfgap = 0.5 * prob_parm->dgap;
+            const Real* prob_lo = gm.ProbLo();
+            const Real* prob_hi = gm.ProbHi();
+
+            EB2::BoxIF lower_electrode(
+                {AMREX_D_DECL(prob_lo[0], prob_lo[1], prob_lo[2])},
+                {AMREX_D_DECL(R1, -halfgap, prob_hi[2])}, true);
+            EB2::BoxIF upper_electrode(
+                {AMREX_D_DECL(prob_lo[0], halfgap, prob_lo[2])},
+                {AMREX_D_DECL(R1, prob_hi[1], prob_hi[2])}, true);
+
+            auto gec_solid = EB2::makeUnion(lower_electrode, upper_electrode);
+            auto gshop = EB2::makeShop(gec_solid);
+            EB2::Build(gshop, gm, 0, 10);
+        } else
+        {
+            amrex::Abort("Unknown geometry type: " + geom);
+        }
     }
 
     // 1 Ghost cell is sufficient for immediate neighbor search
