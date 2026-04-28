@@ -1,0 +1,96 @@
+max_step  = 2
+stop_time = 100e-5 #1000 rf cycles
+
+# PROBLEM SIZE & GEOMETRY
+geometry.is_periodic =  0  0  1
+geometry.coord_sys   =  1       # 0 => cart
+geometry.prob_lo     =  0.0    -0.0508     0.0 
+geometry.prob_hi     =  0.1016  0.0508    0.001
+amr.n_cell           =   256 256  4
+
+# VERBOSITY
+amr.v              = 1       # verbosity in Amr
+
+# REFINEMENT
+amr.max_level       = 0       # maximum level number allowed
+amr.blocking_factor = 2       # block factor in grid generation
+amr.max_grid_size   = 32
+
+amr.regrid_int      = 5       # how often to regrid
+
+# TIME STEP CONTROL
+vidyut.dt             = 1e-11
+
+vidyut.user_defined_potential = 1
+vidyut.user_defined_species = 1
+vidyut.user_defined_vel = 1
+vidyut.num_timestep_correctors=1
+vidyut.using_ib=1
+vidyut.primitive_shape = 1 
+eb2.geom_type = cylinder
+eb2.cylinder_radius = 0.0538
+eb2.cylinder_center = 0.0 0.0 0.0
+eb2.cylinder_direction = 0 
+eb2.cylinder_height = 0.0508
+eb2.cylinder_has_fluid_inside = true
+
+# Tagging
+vidyut.tagged_vars = Potential 
+vidyut.Potential_refine = 1e20
+vidyut.Potential_refinegrad = 400.0
+
+#0 - periodic
+#1 - Dirichlet
+#2 - Homogenous Neumann
+#3 - Inhomogenous Neumann
+#4 - Robin
+#5 - axis
+
+vidyut.pot_bc_lo = 5 1 0
+vidyut.pot_bc_hi = 1 1 0
+
+vidyut.eden_bc_lo = 5 3 0
+vidyut.eden_bc_hi = 3 3 0 
+
+vidyut.eenrg_bc_lo = 5 3 0
+vidyut.eenrg_bc_hi = 3 3 0
+
+vidyut.ion_bc_lo = 5 3 0
+vidyut.ion_bc_hi = 3 3 0
+
+vidyut.neutral_bc_lo = 5 3 0
+vidyut.neutral_bc_hi = 3 3 0
+
+# PLOTFILES
+amr.plot_file  = plt    # root name of plot file
+amr.plot_int   = 7000     # number of timesteps between plot files
+
+# CHECKPOINT
+amr.chk_file = chk      # root name of checkpoint file
+amr.chk_int  = 14000       # number of timesteps between checkpoint files
+
+vidyut.bound_specden=1
+vidyut.min_species_density=1e11
+vidyut.min_electron_density=1e11
+vidyut.min_electron_temp=1160.4518
+vidyut.linsolve_maxiter=200
+vidyut.elecenergy_solve=1
+
+vidyut.gas_pressure=13.3
+vidyut.gas_temperature=300.0
+vidyut.bg_species_ids=1
+
+vidyut.hyp_order=5
+vidyut.weno_scheme=3
+vidyut.num_timestep_correctors=1
+vidyut.multicompsolves=1
+prob.V1=100.0
+prob.ionden_init=1e13
+prob.gama=0.0
+
+#testing scaling
+#vidyut.scaling_species_ids=0 2 3 4 5
+#vidyut.scale_values=1e15 1e15 1e15 1e15 1e15
+#vidyut.time_scale=1e-11
+#vidyut.potential_scale=100.0
+#vidyut.elecenergy_scale=10.0
