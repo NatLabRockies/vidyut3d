@@ -158,10 +158,23 @@ void init_level_with_eb(
             EB2::BoxIF lower_electrode(
                 {AMREX_D_DECL(prob_lo[0], prob_lo[1], prob_lo[2])},
                 {AMREX_D_DECL(R1, -halfgap, prob_hi[2])}, false);
+#if (AMREX_SPACEDIM == 3)
+            // 3D Cartesian: replace rectangular upper electrode with a cylinder
+            // entering into the cavity from above, centered on the domain axis
+            amrex::Real x_center = 0.5 * (prob_lo[0] + prob_hi[0]);
+            amrex::Real z_center = 0.5 * (prob_lo[2] + prob_hi[2]);
+            amrex::Real cyl_height = prob_hi[1] - halfgap;
+            amrex::RealArray cyl_center = {x_center, halfgap + 0.5 * cyl_height,
+                                           z_center};
+            EB2::CylinderIF upper_cylinder(R1, cyl_height, 1, cyl_center, false);
+            auto gec_solid = EB2::makeUnion(lower_electrode, upper_cylinder);
+#else
+            // 2D axisymmetric: upper electrode is a rectangular box
             EB2::BoxIF upper_electrode(
                 {AMREX_D_DECL(prob_lo[0], halfgap, prob_lo[2])},
                 {AMREX_D_DECL(R1, prob_hi[1], prob_hi[2])}, false);
             auto gec_solid = EB2::makeUnion(lower_electrode, upper_electrode);
+#endif
             auto gshop = EB2::makeShop(gec_solid);
             EB2::Build(gshop, gm, 0, 10);
         } else
