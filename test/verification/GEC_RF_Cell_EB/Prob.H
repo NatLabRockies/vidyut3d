@@ -157,10 +157,10 @@ void init_level_with_eb(
             const Real* prob_hi = gm.ProbHi();
             EB2::BoxIF lower_electrode(
                 {AMREX_D_DECL(prob_lo[0], prob_lo[1], prob_lo[2])},
-                {AMREX_D_DECL(R1, -halfgap, prob_hi[2])}, false);
+                {AMREX_D_DECL(R1, -halfgap, prob_hi[2])}, true);
             EB2::BoxIF upper_electrode(
                 {AMREX_D_DECL(prob_lo[0], halfgap, prob_lo[2])},
-                {AMREX_D_DECL(R1, prob_hi[1], prob_hi[2])}, false);
+                {AMREX_D_DECL(R1, prob_hi[1], prob_hi[2])}, true);
             auto gec_solid = EB2::makeUnion(lower_electrode, upper_electrode);
             auto gshop = EB2::makeShop(gec_solid);
             EB2::Build(gshop, gm, 0, 10);
@@ -170,12 +170,21 @@ void init_level_with_eb(
         }
     }
 
+    amrex::Print() << "[EB] EB2::Build complete. IndexSpace empty? "
+               << (EB2::IndexSpace::empty() ? "YES (problem!)" : "NO (ok)")
+               << "\n";
+
     // 1 Ghost cell is sufficient for immediate neighbor search
     int nghost = 1;
     std::unique_ptr<EBFArrayBoxFactory> ebfactory =
         makeEBFabFactory(gm, ba, dm, {nghost, nghost, nghost}, EBSupport::full);
 
     const auto& vfrac_mf = ebfactory->getVolFrac();
+
+    Real vf_min = vfrac_mf.min(0);
+    Real vf_max = vfrac_mf.max(0);
+    amrex::Print() << "[EB] vfrac min/max: " << vf_min << " / " << vf_max << "\n";
+
     const auto& flags = ebfactory->getMultiEBCellFlagFab();
     const auto& bcent = ebfactory->getBndryCent();
     const auto& bnorm = ebfactory->getBndryNormal();
