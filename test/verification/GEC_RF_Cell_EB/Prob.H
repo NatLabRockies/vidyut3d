@@ -161,10 +161,10 @@ void init_level_with_eb(
 
             EB2::BoxIF lower_electrode(
                 {AMREX_D_DECL(prob_lo[0], prob_lo[1], prob_lo[2])},
-                {AMREX_D_DECL(R1, -halfgap, prob_hi[2])}, true);
+                {AMREX_D_DECL(R1, -halfgap, prob_hi[2])}, false);
             EB2::BoxIF upper_electrode(
                 {AMREX_D_DECL(prob_lo[0], halfgap, prob_lo[2])},
-                {AMREX_D_DECL(R1, prob_hi[1], prob_hi[2])}, true);
+                {AMREX_D_DECL(R1, prob_hi[1], prob_hi[2])}, false);
 
             auto gec_solid = EB2::makeUnion(lower_electrode, upper_electrode);
             auto gshop = EB2::makeShop(gec_solid);
