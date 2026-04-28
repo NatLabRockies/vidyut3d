@@ -54,12 +54,6 @@ void initdomaindata(
     const auto lo = lbound(bx);
     const auto hi = ubound(bx);
 
-    const Real* AMREX_RESTRICT prob_lo = geomdata.ProbLo();
-    const Real* AMREX_RESTRICT prob_hi = geomdata.ProbHi();
-    const Real* AMREX_RESTRICT dx = geomdata.CellSize();
-
-    amrex::Real halfgap = 0.5 * prob_parm->dgap;
-
     for (int k = lo.z; k <= hi.z; ++k)
     {
         for (int j = lo.y; j <= hi.y; ++j)
@@ -67,22 +61,6 @@ void initdomaindata(
 
             for (int i = lo.x; i <= hi.x; ++i)
             {
-                Real z = prob_lo[2] + (0.5 + k) * dx[2];
-                Real y = prob_lo[1] + (0.5 + j) * dx[1];
-                Real x = prob_lo[0] + (0.5 + i) * dx[0];
-
-                for (int c = 0; c < NVAR; c++)
-                {
-                    phi(i, j, k, c) = 0.0;
-                }
-
-                phi(i, j, k, CMASK_ID) = 1.0;
-                if (x * (x - prob_parm->R1) < 0.0 &&
-                    (y * y - halfgap * halfgap) > 0.0)
-                {
-                    phi(i, j, k, CMASK_ID) = 0.0;
-                }
-
                 for (int sp = 0; sp < NUM_SPECIES; sp++)
                 {
                     phi(i, j, k, sp) = 1e12;
