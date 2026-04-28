@@ -14,11 +14,11 @@ COMP	   = clang
 USE_MPI    = TRUE
 USE_OMP    = FALSE 
 USE_CUDA   = FALSE
-USE_EB     = TRUE
+USE_EB     = TRUE 
 
 Bpack   := ./Make.package 
 Blocs   := . 
 
-DEFINES += -DAMReX_ASSERTIONS=ON -DAMReX_BOUND_CHECK=ON -DAMReX_USE_EB
 
+DEFINES +=  -DAMReX_USE_EB
 include ${VIDYUT_DIR}/test/Make.vidyut

@@ -17,6 +17,6 @@ struct ProbParm
     amrex::Real V2 = 0.0;
     amrex::Real bg_gasden = 1.0;
     amrex::Real gama = 0.02;
-    bool enable_EB = true ;
+    bool enable_EB = true;
 };
 #endif

@@ -1,4 +1,4 @@
-max_step  = 2
+max_step  = 1
 stop_time = 100e-5 #1000 rf cycles
 
 # PROBLEM SIZE & GEOMETRY
@@ -26,13 +26,6 @@ vidyut.user_defined_species = 1
 vidyut.user_defined_vel = 1
 vidyut.num_timestep_correctors=1
 vidyut.using_ib=1
-vidyut.primitive_shape = 1 
-eb2.geom_type = cylinder
-eb2.cylinder_radius = 0.0538
-eb2.cylinder_center = 0.0 0.0 0.0
-eb2.cylinder_direction = 0 
-eb2.cylinder_height = 0.0508
-eb2.cylinder_has_fluid_inside = true
 
 # Tagging
 vidyut.tagged_vars = Potential 
