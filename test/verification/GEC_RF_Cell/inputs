@@ -1,15 +1,14 @@
-max_step  = 120000000
+max_step  = 1
 stop_time = 100e-5 #1000 rf cycles
 
 # PROBLEM SIZE & GEOMETRY
 geometry.is_periodic =  0  0  1
-geometry.coord_sys   =  1       # 0 => cart
+geometry.coord_sys   =  1     # 0 => cart
 geometry.prob_lo     =  0.0    -0.0508     0.0 
 geometry.prob_hi     =  0.1016  0.0508    0.001
 amr.n_cell           =   256 256  4
 
-# VERBOSITY
-amr.v              = 1       # verbosity in Amr
+
 
 # REFINEMENT
 amr.max_level       = 0       # maximum level number allowed
@@ -26,6 +25,14 @@ vidyut.user_defined_species = 1
 vidyut.user_defined_vel = 1
 vidyut.num_timestep_correctors=1
 vidyut.using_ib=1
+
+
+
+# EB Cylinder Definitions
+# GEC electrode geometry: solid where 0 < r < R1 AND |z| > halfgap
+# R1 = 0.0538 (electrode radius), halfgap = dgap/2 = 0.0127
+vidyut.primitive_shape = 0
+eb2.geom_type = gec
 
 # Tagging
 vidyut.tagged_vars = Potential 

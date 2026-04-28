@@ -77,12 +77,6 @@ void initdomaindata(
                 }
 
                 phi(i, j, k, CMASK_ID) = 1.0;
-                if (x * (x - prob_parm->R1) < 0.0 &&
-                    (y * y - halfgap * halfgap) > 0.0)
-                {
-                    phi(i, j, k, CMASK_ID) = 0.0;
-                }
-
                 for (int sp = 0; sp < NUM_SPECIES; sp++)
                 {
                     phi(i, j, k, sp) = 1e12;
@@ -145,12 +139,35 @@ void init_level_with_eb(
     pp_vidyut.query("primitive_shape", primitive_shape);
     if (primitive_shape)
     {
-        EB2::Build(gm, 0, 10);
+    amrex::Print() << "[EB] Calling EB2::Build with eb2.geom_type from inputs...\n";
+    EB2::Build(gm, 0, 10);
+    amrex::Print() << "[EB] EB2::Build complete. IndexSpace empty? "
+                   << (EB2::IndexSpace::empty() ? "YES (problem!)" : "NO (ok)") << "\n";
     } else
     {
-        //amrex::Abort("Unknown geometry type");
-        amrex::Print() << "No geometry specified, defaulting to primitive shape (full domain)" << std::endl;
-        return ;
+        ParmParse pp("eb2");
+        std::string geom;
+        pp.query("geom_type", geom);
+        amrex::Print() << "[EB] Building geometry with geom_type = " << geom << "\n";
+        if (geom == "gec")
+        {
+            amrex::Real R1 = prob_parm->R1;
+            amrex::Real halfgap = 0.5 * prob_parm->dgap;
+            const Real* prob_lo = gm.ProbLo();
+            const Real* prob_hi = gm.ProbHi();
+            EB2::BoxIF lower_electrode(
+                {AMREX_D_DECL(prob_lo[0], prob_lo[1], prob_lo[2])},
+                {AMREX_D_DECL(R1, -halfgap, prob_hi[2])}, false);
+            EB2::BoxIF upper_electrode(
+                {AMREX_D_DECL(prob_lo[0], halfgap, prob_lo[2])},
+                {AMREX_D_DECL(R1, prob_hi[1], prob_hi[2])}, false);
+            auto gec_solid = EB2::makeUnion(lower_electrode, upper_electrode);
+            auto gshop = EB2::makeShop(gec_solid);
+            EB2::Build(gshop, gm, 0, 10);
+        } else
+        {
+            amrex::Abort("Unknown geometry type: " + geom);
+        }
     }
 
     // 1 Ghost cell is sufficient for immediate neighbor search
