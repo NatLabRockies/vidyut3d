@@ -858,6 +858,13 @@ void Vidyut::implicit_solve_scalar(
     MLMG mlmg(*linsolve_ptr);
     mlmg.setMaxIter(linsolve_maxiter);
     mlmg.setVerbose(linsolve_verbose);
+    
+    // Set bottom solver tolerances for non-hypre solver
+    mlmg.setBotSolverRelTol(linsolve_bot_reltol);
+    if (linsolve_bot_abstol >= 0.0)
+    {
+        mlmg.setBotSolverAbsTol(linsolve_bot_abstol);
+    }
 
 #ifdef AMREX_USE_HYPRE
     if (use_hypre)
