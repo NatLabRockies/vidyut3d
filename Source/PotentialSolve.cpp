@@ -463,6 +463,12 @@ void Vidyut::solve_potential(
     MLMG mlmg(*linsolve_ptr);
     mlmg.setMaxIter(linsolve_maxiter);
     mlmg.setVerbose(linsolve_verbose);
+    mlmg.setPreSmooth(16);
+    mlmg.setPostSmooth(16);
+
+    // Set tolerances
+    mlmg.setBottomTolerance(1.e-10);
+    mlmg.setBottomMaxIter(200);
 
 #ifdef AMREX_USE_HYPRE
     if (use_hypre)
