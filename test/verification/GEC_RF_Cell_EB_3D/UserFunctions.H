@@ -105,9 +105,9 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     const amrex::Real centroid_x = (sb_arr(intcell,CPX_ID)==0)? sb_arr(cutcell, CPX_ID) : sb_arr(intcell, CPX_ID);
     const amrex::Real centroid_y = (sb_arr(intcell,CPY_ID)==0)? sb_arr(cutcell, CPY_ID) : sb_arr(intcell, CPY_ID);
     const amrex::Real centroid_z = (sb_arr(intcell,CPZ_ID)==0)? sb_arr(cutcell, CPZ_ID) : sb_arr(intcell, CPZ_ID);
-    ccibvec[0] = std::abs(prob_lo[0] + (intcell[0] + 0.5) * dx[0]-centroid_x);
-    ccibvec[1] = std::abs(prob_lo[1] + (intcell[1] + 0.5) * dx[1]-centroid_y);
-    ccibvec[2] = std::abs(prob_lo[2] + (intcell[2] + 0.5) * dx[2]-centroid_z);
+    ccibvec[0] = std::abs(prob_lo[0] + (intcell[0] + 0.5) * dx[0] - centroid_x);
+    ccibvec[1] = std::abs(prob_lo[1] + (intcell[1] + 0.5) * dx[1] - centroid_y);
+    ccibvec[2] = std::abs(prob_lo[2] + (intcell[2] + 0.5) * dx[2] - centroid_z);
     // helper lambda to convert real normal to {-1, 0, +1}
     auto sgn3 = [](amrex::Real v) -> amrex::Real {
         if (v > 1e-12) return 1.0;
@@ -161,15 +161,15 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
 
         // for both left or right being the interior cell
         // Dirichlet condition works out to the same sign
-        if (dir == 1 && xloc[0] <= prob_parm.R1 && xloc[0]>=-prob_parm.R1 && xloc[2]<=prob_parm.R1 && xloc[2]>=-prob_parm.R1)
+        if (dir == 1 && xloc[0] <= prob_parm.R1 && xloc[0] >= -prob_parm.R1 && xloc[2] <= prob_parm.R1 && xloc[2] >= -prob_parm.R1)
         {
             int top_side = (xloc[dir] > midy) ? 1 : 0;
             amrex::Real phi_dirc =
                 (top_side)
                     ? prob_parm.V1 * std::cos(2.0 * PI * prob_parm.f * time)
                     : prob_parm.V2;
-            acoeff(intcell) += (bscalar / ascalar) * bcoeff(intcell, 0.0) * alpha / dx[dir] ;
-            rhs(intcell, rhs_comp) += bscalar * bcoeff(intcell, 0.0) * phi_dirc  * alpha / dx[dir] ;
+            acoeff(intcell) += (bscalar / ascalar) * bcoeff(intcell, 0.0) * alpha / dx[dir];
+            rhs(intcell, rhs_comp) += bscalar * bcoeff(intcell, 0.0) * phi_dirc * alpha / dx[dir];
         }
         /*else if(dir==0 && xloc[0]<prob_hi[0])
         {
@@ -179,8 +179,8 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
         else
         {
             amrex::Real phi_dirc = 0.0;
-            acoeff(intcell) += (bscalar / ascalar) * bcoeff(intcell, 0.0) * alpha / dx[dir] ;
-            rhs(intcell, rhs_comp) += bscalar * bcoeff(intcell, 0.0) * phi_dirc  * alpha / dx[dir] ;
+            acoeff(intcell) += (bscalar / ascalar) * bcoeff(intcell, 0.0) * alpha / dx[dir];
+            rhs(intcell, rhs_comp) += bscalar * bcoeff(intcell, 0.0) * phi_dirc * alpha / dx[dir];
         }
     } else if (solved_comp == E_ID || solved_comp == EEN_ID)
     {
