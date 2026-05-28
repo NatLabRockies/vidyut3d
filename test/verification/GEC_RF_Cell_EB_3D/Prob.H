@@ -110,15 +110,11 @@ void initdomaindata_eb(
     phi(i, j, k, CMASK_ID) = vfrac(i,j,k); //(vfrac(i, j, k)>0.02)? 1.0 : 0.0;
     phi(i, j, k, CPX_ID) = cp(i, j, k, 0);
     phi(i, j, k, CPY_ID) = cp(i, j, k, 1);
-#if (AMREX_SPACEDIM == 3)
     phi(i, j, k, CPZ_ID) = cp(i, j, k, 2);
-#endif
 
     phi(i, j, k, NX_ID) = nrm(i, j, k, 0);
     phi(i, j, k, NY_ID) = nrm(i, j, k, 1);
-#if (AMREX_SPACEDIM == 3)
     phi(i, j, k, NZ_ID) = nrm(i, j, k, 2);
-#endif
 }
 AMREX_INLINE
 void init_level_with_eb(
@@ -260,10 +256,8 @@ void init_level_with_eb(
                         plo[0] + (i + 0.5 + bc_arr(i, j, k, 0)) * dx[0];
                     cp_arr(i, j, k, 1) =
                         plo[1] + (j + 0.5 + bc_arr(i, j, k, 1)) * dx[1];
-#if (AMREX_SPACEDIM == 3)
                     cp_arr(i, j, k, 2) =
                         plo[2] + (k + 0.5 + bc_arr(i, j, k, 2)) * dx[2];
-#endif
                     for (int n = 0; n < AMREX_SPACEDIM; ++n)
                         nrm_arr(i, j, k, n) = bn_arr(i, j, k, n);
                 }
