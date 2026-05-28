@@ -1,4 +1,0 @@
-CEXE_headers += Prob.H UserFunctions.H Chemistry.H UserSources.H ProbParm.H
-CEXE_sources += Chemistry.cpp
-
-
