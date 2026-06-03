@@ -32,7 +32,18 @@ Vidyut is a massively-parallel plasma-fluid solver for low-temperature plasmas (
 
 # Citation
 
-To cite Vidyut3d, use our software record:
+To cite Vidyut3d, use our computer physics communications paper or the software record:
+```
+@article{sitaraman2026vidyut3d,
+  title={Vidyut3d: a GPU accelerated fluid solver for non-equilibrium plasmas on adaptive grids},
+  author={Sitaraman, Hariswaran and Deak, Nicholas and Taneja, Taaresh},
+  journal={Computer Physics Communications},
+  pages={110236},
+  year={2026},
+  publisher={Elsevier}
+}
+```
+
 ```
 @techreport{
 sitaraman2024vidyut3d,
