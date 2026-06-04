@@ -90,54 +90,88 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     IntVect intcell = (sgn == 1) ? lcell : rcell;
     amrex::Real orig_outward_normal[AMREX_SPACEDIM] = {0.0};
     orig_outward_normal[dir] = sgn;
-    //amrex::Print()<<" Original Normal: "<<xloc[dir]<<"  "<<dir<<"  "<<orig_outward_normal[0]<<" "<<orig_outward_normal[1]<<"\n";
-    //amrex::Real dx2 = dx[dir] * dx[dir];
-    // EB Normal 
-    //IntVect cutcell = (sgn ==1) ? rcell : lcell;
-    // interior cell
+    // amrex::Print()<<" Original Normal: "<<xloc[dir]<<"  "<<dir<<"
+    // "<<orig_outward_normal[0]<<" "<<orig_outward_normal[1]<<"\n"; amrex::Real
+    // dx2 = dx[dir] * dx[dir];
+    //  EB Normal
+    // IntVect cutcell = (sgn ==1) ? rcell : lcell;
+    //  interior cell
     amrex::Real vf_l = sb_arr(lcell, CMASK_ID);
     amrex::Real vf_r = sb_arr(rcell, CMASK_ID);
     intcell = (vf_l >= vf_r) ? lcell : rcell;
     IntVect cutcell = (vf_l > vf_r) ? rcell : lcell;
     amrex::Real ccibvec[AMREX_SPACEDIM];
     amrex::Real outward_normal[AMREX_SPACEDIM] = {0.0};
-    outward_normal[dir] = (vf_l>=vf_r)? 1:-1;
-    const amrex::Real centroid_x = (sb_arr(intcell,CPX_ID)==0)? sb_arr(cutcell, CPX_ID) : sb_arr(intcell, CPX_ID);
-    const amrex::Real centroid_y = (sb_arr(intcell,CPY_ID)==0)? sb_arr(cutcell, CPY_ID) : sb_arr(intcell, CPY_ID);
-    const amrex::Real centroid_z = (sb_arr(intcell,CPZ_ID)==0)? sb_arr(cutcell, CPZ_ID) : sb_arr(intcell, CPZ_ID);
-    ccibvec[0] = std::abs(prob_lo[0] + (intcell[0] + 0.5) * dx[0]-centroid_x);
-    ccibvec[1] = std::abs(prob_lo[1] + (intcell[1] + 0.5) * dx[1]-centroid_y);
-    ccibvec[2] = std::abs(prob_lo[2] + (intcell[2] + 0.5) * dx[2]-centroid_z);
+    outward_normal[dir] = (vf_l >= vf_r) ? 1 : -1;
+    const amrex::Real centroid_x = (sb_arr(intcell, CPX_ID) == 0)
+                                       ? sb_arr(cutcell, CPX_ID)
+                                       : sb_arr(intcell, CPX_ID);
+    const amrex::Real centroid_y = (sb_arr(intcell, CPY_ID) == 0)
+                                       ? sb_arr(cutcell, CPY_ID)
+                                       : sb_arr(intcell, CPY_ID);
+    const amrex::Real centroid_z = (sb_arr(intcell, CPZ_ID) == 0)
+                                       ? sb_arr(cutcell, CPZ_ID)
+                                       : sb_arr(intcell, CPZ_ID);
+    ccibvec[0] = std::abs(prob_lo[0] + (intcell[0] + 0.5) * dx[0] - centroid_x);
+    ccibvec[1] = std::abs(prob_lo[1] + (intcell[1] + 0.5) * dx[1] - centroid_y);
+    ccibvec[2] = std::abs(prob_lo[2] + (intcell[2] + 0.5) * dx[2] - centroid_z);
     // helper lambda to convert real normal to {-1, 0, +1}
     auto sgn3 = [](amrex::Real v) -> amrex::Real {
         if (v > 1e-12) return 1.0;
         if (v < -1e-12) return -1.0;
         return 0.0;
     };
-    amrex::Real d_ccib = std::sqrt(ccibvec[0] * ccibvec[0] + ccibvec[1] * ccibvec[1] + ccibvec[2] * ccibvec[2]);
-    const amrex::Real alpha = 1.0 / d_ccib;
-    //const amrex::Real alpha = 1.0 / d_ccib * outward_normal[dir];
-    //amrex::Print()<<" EB Normal: "<<xloc[dir]<<"  "<<dir<<"  "<<outward_normal[0]<<" "<<outward_normal[1]<<"\n";
-    if(orig_outward_normal[0]!=outward_normal[0] || orig_outward_normal[1]!=outward_normal[1] || orig_outward_normal[2]!=outward_normal[2])
+    amrex::Real d_ccib = std::sqrt(
+        ccibvec[0] * ccibvec[0] + ccibvec[1] * ccibvec[1] +
+        ccibvec[2] * ccibvec[2]);
+    const amrex::Real alpha = 1.0 / d_ccib * std::abs(ccibvec[dir] / d_ccib);
+    // Scale the normal since it can point anywhere
+    outward_normal[dir] *= std::abs(ccibvec[dir] / d_ccib);
+    /*    if(d_ccib>dx[dir]){
+      amrex::Print()<<"Something wrong"<<d_ccib<<"  "<<dx[dir]<<"
+      "<<std::abs(ccibvec[dir]/d_ccib)<<std::endl;
+      }*/
+    if (d_ccib < 1e-4)
+    {
+        amrex::Print() << "May Diverge:" << d_ccib << "  "
+                       << sb_arr(intcell, CMASK_ID) << " "
+                       << sb_arr(cutcell, CMASK_ID) << std::endl;
+        amrex::Print() << "Actual Centroild" << sb_arr(cutcell, CPX_ID) << " "
+                       << sb_arr(cutcell, CPY_ID) << " "
+                       << sb_arr(cutcell, CPZ_ID) << std::endl;
+        amrex::Print() << "Int Cell Centroid" << sb_arr(intcell, CPX_ID) << " "
+                       << sb_arr(intcell, CPY_ID) << "  "
+                       << sb_arr(intcell, CPZ\
+_ID) << std::endl;
+    }
+    // const amrex::Real alpha = 1.0 / d_ccib * outward_normal[dir];
+    // amrex::Print()<<" EB Normal: "<<xloc[dir]<<"  "<<dir<<"
+    // "<<outward_normal[0]<<" "<<outward_normal[1]<<"\n";
+    /*if(orig_outward_normal[0]!=outward_normal[0] ||
+    orig_outward_normal[1]!=outward_normal[1] ||
+    orig_outward_normal[2]!=outward_normal[2])
     {
         amrex::Print()<<"Normal flipped from original normal\n";
-    }
+        }*/
     /*if((d_ccib -0.5*dx[dir])>1e-5)
     {
-        amrex::Print()<<"Warning: distance from int cell centroid to IB is greater than half cell size. d_ccib="<<d_ccib<<" dx="<<0.5 *dx[dir]<<"\n";
+        amrex::Print()<<"Warning: distance from int cell centroid to IB is
+    greater than half cell size. d_ccib="<<d_ccib<<" dx="<<0.5 *dx[dir]<<"\n";
     }*/
-    //amrex::Print()<<"Comparison:"<< 0.5 * dx[dir] <<"  "<<d_ccib<<std::endl;
-    //amrex::Print()<<"Centroid:"<<xib[0]<<" "<<xib[1]<<std::endl;
-    /*if((sb_arr(intcell,CPX_ID)==0 || sb_arr(intcell,CPY_ID)==0 || sb_arr(intcell,CPZ_ID)==0) && (sb_arr(cutcell,CPX_ID)==0 || sb_arr(cutcell,CPY_ID)==0 || sb_arr(cutcell,CPZ_ID)==0))  
+    // amrex::Print()<<"Comparison:"<< 0.5 * dx[dir] <<"  "<<d_ccib<<std::endl;
+    // amrex::Print()<<"Centroid:"<<xib[0]<<" "<<xib[1]<<std::endl;
+    if ((sb_arr(intcell, CPX_ID) == 0 || sb_arr(intcell, CPY_ID) == 0 ||
+         sb_arr(intcell, CPZ_ID) == 0) &&
+        (sb_arr(cutcell, CPX_ID) == 0 || sb_arr(cutcell, CPY_ID) == 0 ||
+         sb_arr(cutcell, CPZ_ID) == 0))
     {
-    amrex::Print()<<"Actual Centroild"<<sb_arr(cutcell, CPX_ID)<<" "<<sb_arr(cutcell, CPY_ID)<<" "<<sb_arr(cutcell, CPZ_ID)<<std::endl;
-    amrex::Print()<<"Int Cell Centroid"<<sb_arr(intcell, CPX_ID)<<" "<<sb_arr(intcell, CPY_ID)<<"  "<<sb_arr(intcell, CPZ_ID)<<std::endl;
-    }*/
-    if((std::abs(sb_arr(intcell,CPX_ID))>0 && std::abs(sb_arr(cutcell,CPX_ID))>0) && (std::abs(sb_arr(intcell,CPY_ID))>0 && std::abs(sb_arr(cutcell,CPY_ID))>0) && (std::abs(sb_arr(intcell,CPZ_ID))>0 && std::abs(sb_arr(cutcell,CPZ_ID))>0))
-    {
-        amrex::Print()<<"Warning: Both int cell and cut cell have non-zero centroid. This should not happen. int cell centroid:"<<sb_arr(intcell, CPX_ID)<<" "<<sb_arr(intcell, CPY_ID)<<"  "<<sb_arr(intcell, CPZ_ID)<<" cut cell centroid:"<<sb_arr(cutcell, CPX_ID)<<" "<<sb_arr(cutcell, CPY_ID)<<"  "<<sb_arr(cutcell, CPZ_ID)<<std::endl;
-        amrex::Print()<<"CMASK int cell:"<<sb_arr(intcell, CMASK_ID)<<" cut cell:"<<sb_arr(cutcell, CMASK_ID)<<std::endl;
-        }
+        amrex::Print() << "Actual Centroild" << sb_arr(cutcell, CPX_ID) << " "
+                       << sb_arr(cutcell, CPY_ID) << " "
+                       << sb_arr(cutcell, CPZ_ID) << std::endl;
+        amrex::Print() << "Int Cell Centroid" << sb_arr(intcell, CPX_ID) << " "
+                       << sb_arr(intcell, CPY_ID) << "  "
+                       << sb_arr(intcell, CPZ_ID) << std::endl;
+    }
 
     amrex::Real ndens = 0.0;
     for (int sp = 0; sp < NUM_SPECIES; sp++) ndens += sb_arr(intcell, sp);
@@ -161,15 +195,18 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
 
         // for both left or right being the interior cell
         // Dirichlet condition works out to the same sign
-        if (dir == 1 && xloc[0] <= prob_parm.R1 && xloc[0]>=-prob_parm.R1 && xloc[2]<=prob_parm.R1 && xloc[2]>=-prob_parm.R1)
+        if (dir == 1 && xloc[0] <= prob_parm.R1 && xloc[0] >= -prob_parm.R1 &&
+            xloc[2] <= prob_parm.R1 && xloc[2] >= -prob_parm.R1)
         {
             int top_side = (xloc[dir] > midy) ? 1 : 0;
             amrex::Real phi_dirc =
                 (top_side)
                     ? prob_parm.V1 * std::cos(2.0 * PI * prob_parm.f * time)
                     : prob_parm.V2;
-            acoeff(intcell) += (bscalar / ascalar) * bcoeff(intcell, 0.0) * alpha / dx[dir] ;
-            rhs(intcell, rhs_comp) += bscalar * bcoeff(intcell, 0.0) * phi_dirc  * alpha / dx[dir] ;
+            acoeff(intcell) +=
+                (bscalar / ascalar) * bcoeff(intcell, 0.0) * alpha / dx[dir];
+            rhs(intcell, rhs_comp) +=
+                bscalar * bcoeff(intcell, 0.0) * phi_dirc * alpha / dx[dir];
         }
         /*else if(dir==0 && xloc[0]<prob_hi[0])
         {
@@ -179,8 +216,10 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
         else
         {
             amrex::Real phi_dirc = 0.0;
-            acoeff(intcell) += (bscalar / ascalar) * bcoeff(intcell, 0.0) * alpha / dx[dir] ;
-            rhs(intcell, rhs_comp) += bscalar * bcoeff(intcell, 0.0) * phi_dirc  * alpha / dx[dir] ;
+            acoeff(intcell) +=
+                (bscalar / ascalar) * bcoeff(intcell, 0.0) * alpha / dx[dir];
+            rhs(intcell, rhs_comp) +=
+                bscalar * bcoeff(intcell, 0.0) * phi_dirc * alpha / dx[dir];
         }
     } else if (solved_comp == E_ID || solved_comp == EEN_ID)
     {

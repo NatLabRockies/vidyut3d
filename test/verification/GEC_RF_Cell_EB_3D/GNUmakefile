@@ -1,4 +1,4 @@
-VIDYUT_DIR = ../../vidyut3d
+VIDYUT_DIR = ../../../vidyut3d_mlmg
 
 PRECISION  = DOUBLE
 PROFILE    = FALSE
@@ -9,7 +9,7 @@ DEBUG      = FALSE
 #DIM        = 2
 DIM       = 3
 
-COMP	   = clang
+COMP	   = gnu
 
 USE_MPI    = TRUE
 USE_OMP    = FALSE 

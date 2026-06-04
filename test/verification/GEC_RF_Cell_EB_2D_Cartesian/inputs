@@ -3,17 +3,18 @@ stop_time = 100e-5 #1000 rf cycles
 
 # PROBLEM SIZE & GEOMETRY
 geometry.is_periodic =  0  0  1
-geometry.coord_sys   =  1     # 0 => cart
-geometry.prob_lo     =  0.0    -0.0508     0.0 
+geometry.coord_sys   =  0       # 0 => cart
+geometry.prob_lo     =  -0.1016    -0.0508     0.0 
 geometry.prob_hi     =  0.1016  0.0508    0.001
-amr.n_cell           =   256 256  4
+amr.n_cell           =   512 256  4
 
-
+# VERBOSITY
+amr.v              = 1       # verbosity in Amr
 
 # REFINEMENT
 amr.max_level       = 0       # maximum level number allowed
-amr.blocking_factor = 2       # block factor in grid generation
-amr.max_grid_size   = 32
+amr.blocking_factor = 4       # block factor in grid generation
+amr.max_grid_size   = 16
 
 amr.regrid_int      = 5       # how often to regrid
 
@@ -25,14 +26,6 @@ vidyut.user_defined_species = 1
 vidyut.user_defined_vel = 1
 vidyut.num_timestep_correctors=1
 vidyut.using_ib=1
-
-
-
-# EB Cylinder Definitions
-# GEC electrode geometry: solid where 0 < r < R1 AND |z| > halfgap
-# R1 = 0.0538 (electrode radius), halfgap = dgap/2 = 0.0127
-vidyut.primitive_shape = 0
-eb2.geom_type = gec
 
 # Tagging
 vidyut.tagged_vars = Potential 
@@ -46,19 +39,19 @@ vidyut.Potential_refinegrad = 400.0
 #4 - Robin
 #5 - axis
 
-vidyut.pot_bc_lo = 5 1 0
+vidyut.pot_bc_lo = 1 1 0
 vidyut.pot_bc_hi = 1 1 0
 
-vidyut.eden_bc_lo = 5 3 0
+vidyut.eden_bc_lo = 3 3 0
 vidyut.eden_bc_hi = 3 3 0 
 
-vidyut.eenrg_bc_lo = 5 3 0
+vidyut.eenrg_bc_lo = 3 3 0
 vidyut.eenrg_bc_hi = 3 3 0
 
-vidyut.ion_bc_lo = 5 3 0
+vidyut.ion_bc_lo = 3 3 0
 vidyut.ion_bc_hi = 3 3 0
 
-vidyut.neutral_bc_lo = 5 3 0
+vidyut.neutral_bc_lo = 3 3 0
 vidyut.neutral_bc_hi = 3 3 0
 
 # PLOTFILES
@@ -88,6 +81,11 @@ prob.V1=100.0
 prob.ionden_init=1e13
 prob.gama=0.0
 
+# EB Cylinder Definitions
+# GEC electrode geometry: solid where 0 < r < R1 AND |z| > halfgap
+# R1 = 0.0538 (electrode radius), halfgap = dgap/2 = 0.0127
+vidyut.primitive_shape = 0
+eb2.geom_type = gec_noaxisym
 #testing scaling
 #vidyut.scaling_species_ids=0 2 3 4 5
 #vidyut.scale_values=1e15 1e15 1e15 1e15 1e15

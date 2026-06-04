@@ -462,7 +462,14 @@ void Vidyut::solve_potential(
 
     MLMG mlmg(*linsolve_ptr);
     mlmg.setMaxIter(linsolve_maxiter);
-    mlmg.setVerbose(linsolve_verbose);
+    // mlmg.setVerbose(linsolve_verbose);
+    // mlmg.setVerbose(2);
+    //  Set bottom solver tolerances for non-hypre solver
+    mlmg.setPreSmooth(8);
+    mlmg.setPostSmooth(8);
+
+    // Set verbosity
+    mlmg.setVerbose(2);
 
 #ifdef AMREX_USE_HYPRE
     if (use_hypre)
@@ -482,7 +489,6 @@ void Vidyut::solve_potential(
 
     mlmg.solve(
         GetVecOfPtrs(solution), GetVecOfConstPtrs(rhs), tol_rel, tol_abs);
-
     amrex::Print() << "Solved Potential\n";
 
     mlmg.getGradSolution(GetVecOfArrOfPtrs(efield_fc));

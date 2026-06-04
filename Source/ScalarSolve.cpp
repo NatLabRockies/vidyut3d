@@ -858,6 +858,8 @@ void Vidyut::implicit_solve_scalar(
     MLMG mlmg(*linsolve_ptr);
     mlmg.setMaxIter(linsolve_maxiter);
     mlmg.setVerbose(linsolve_verbose);
+    mlmg.setPreSmooth(8);
+    mlmg.setPostSmooth(8);
 
 #ifdef AMREX_USE_HYPRE
     if (use_hypre)

@@ -1,30 +1,32 @@
-max_step  = 1
+max_step  = 120000000
+#max_step=2
 stop_time = 100e-5 #1000 rf cycles
 
 # PROBLEM SIZE & GEOMETRY
 geometry.is_periodic =  0  0  0
 geometry.coord_sys   =  0       # 0 => cart
-geometry.prob_lo     =  -0.1076    -0.0508     -0.1076
-geometry.prob_hi     =  0.1076  0.0508    0.1076
-amr.n_cell           =   256 128  256
+geometry.prob_lo     =  -0.1016    -0.0508     -0.1016 
+geometry.prob_hi     =  0.1016  0.0508    0.1016
+amr.n_cell           =   128 256  128
 
 # VERBOSITY
 amr.v              = 1       # verbosity in Amr
 
 # REFINEMENT
 amr.max_level       = 0       # maximum level number allowed
-amr.blocking_factor = 2       # block factor in grid generation
-amr.max_grid_size   = 32
+amr.blocking_factor = 4       # block factor in grid generation
+amr.max_grid_size   = 16
 
 amr.regrid_int      = 5       # how often to regrid
-
+#amr.restart         = chk00012
 # TIME STEP CONTROL
 vidyut.dt             = 1e-11
-
 vidyut.user_defined_potential = 1
 vidyut.user_defined_species = 1
 vidyut.user_defined_vel = 1
-vidyut.num_timestep_correctors=1
+vidyut.num_timestep_correctors=2
+vidyut.electron_poisson_coupling = 1
+vidyut.electron_poisson_maxiters = 4
 vidyut.using_ib=1
 
 # Tagging
@@ -73,8 +75,8 @@ vidyut.gas_pressure=13.3
 vidyut.gas_temperature=300.0
 vidyut.bg_species_ids=1
 
-vidyut.hyp_order=5
-vidyut.weno_scheme=3
+vidyut.hyp_order=1
+#vidyut.weno_scheme=3
 vidyut.num_timestep_correctors=1
 vidyut.multicompsolves=1
 prob.V1=100.0
