@@ -396,6 +396,8 @@ void Vidyut::implicit_solve_scalar(
     // FIXME: add these as inputs
     int max_coarsening_level = linsolve_max_coarsening_level;
     int linsolve_verbose = solver_verbose;
+    int pre_smooth = linsolve_num_pre_smooth;
+    int post_smooth = linsolve_num_post_smooth;
     int captured_startspec = startspec;
     int captured_numspec = numspec;
 
@@ -858,6 +860,8 @@ void Vidyut::implicit_solve_scalar(
     MLMG mlmg(*linsolve_ptr);
     mlmg.setMaxIter(linsolve_maxiter);
     mlmg.setVerbose(linsolve_verbose);
+    mlmg.setPreSmooth(pre_smooth);
+    mlmg.setPostSmooth(post_smooth);
 
 #ifdef AMREX_USE_HYPRE
     if (use_hypre)

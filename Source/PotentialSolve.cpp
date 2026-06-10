@@ -32,6 +32,8 @@ void Vidyut::solve_potential(
     // FIXME: add these as inputs
     int max_coarsening_level = linsolve_max_coarsening_level;
     int max_iter = linsolve_maxiter;
+    int pre_smooth = linsolve_num_pre_smooth;
+    int post_smooth = linsolve_num_post_smooth;
     Real ascalar = 1.0;
     Real bscalar = 1.0;
     ProbParm const* localprobparm = d_prob_parm;
@@ -463,6 +465,8 @@ void Vidyut::solve_potential(
     MLMG mlmg(*linsolve_ptr);
     mlmg.setMaxIter(linsolve_maxiter);
     mlmg.setVerbose(linsolve_verbose);
+    mlmg.setPreSmooth(pre_smooth);
+    mlmg.setPostSmooth(post_smooth);
 
 #ifdef AMREX_USE_HYPRE
     if (use_hypre)
@@ -482,6 +486,14 @@ void Vidyut::solve_potential(
 
     mlmg.solve(
         GetVecOfPtrs(solution), GetVecOfConstPtrs(rhs), tol_rel, tol_abs);
+
+    /*for (int ilev = 0; ilev <= finest_level; ilev++)
+      {
+        Real pot_min = solution[ilev].min(0);  // Get minimum of component 0
+        Real pot_max = solution[ilev].max(0);  // Get maximum of component 0
+        amrex::Print() << "Level " << ilev << ": Potential min = " << pot_min
+                       << ", max = " << pot_max << "\n";
+      } */
 
     amrex::Print() << "Solved Potential\n";
 
