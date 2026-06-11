@@ -392,11 +392,11 @@ void Vidyut::Evolve()
                     auto it = std::find(
                         bg_specid_list.begin(), bg_specid_list.end(), ind);
 
-                    int iam_a_bgspecie=(it!=bg_specid_list.end());
+                    int iam_a_bgspecie = (it != bg_specid_list.end());
 
-                    //transport solve is false if i am a background gas specie
-                    //or electrons - electrons solve done already
-                    transport_solve_flag=!(iam_a_bgspecie || (ind==E_IDX));
+                    // transport solve is false if i am a background gas specie
+                    // or electrons - electrons solve done already
+                    transport_solve_flag = !(iam_a_bgspecie || (ind == E_IDX));
 
                     if (transport_solve_flag)
                     {
@@ -426,7 +426,7 @@ void Vidyut::Evolve()
                                 neutral_bc_hi, grad_fc);
                         }
                     }
-                    
+
                     if (iam_a_bgspecie && do_bg_reactions)
                     {
                         for (int ilev = 0; ilev <= finest_level; ilev++)
@@ -489,10 +489,10 @@ void Vidyut::Evolve()
                             expl_src, ion_bc_lo, ion_bc_hi, grad_fc);
                     }
                 }
-                if (NUM_NEUTRALS > 0) 
+                if (NUM_NEUTRALS > 0)
                 {
-                    //NUM_NEUTRALS includes all species other than background gas 
-                    //bg gas for which transport neednt be solved
+                    // NUM_NEUTRALS includes all species other than background
+                    // gas bg gas for which transport neednt be solved
                     int comp = FIRST_NEUTRAL;
                     for (comp = FIRST_NEUTRAL;
                          comp <=
@@ -531,8 +531,8 @@ void Vidyut::Evolve()
 
                 if (do_bg_reactions)
                 {
-                    //for bg gas for which transport neednt be solved but 
-                    //chemistry needs to be updated
+                    // for bg gas for which transport neednt be solved but
+                    // chemistry needs to be updated
                     for (unsigned int bgind = 0; bgind < bg_specid_list.size();
                          bgind++)
                     {
@@ -556,9 +556,8 @@ void Vidyut::Evolve()
                                     auto phi_arr = phi_arrays[nbx];
                                     auto rxn_arr = rxn_arrays[nbx];
                                     phi_arr(i, j, k, ind) +=
-                                    rxn_arr(i, j, k, ind) * dt_common;
-                                    if (phi_arr(i, j, k, ind) <
-                                        minspecden &&
+                                        rxn_arr(i, j, k, ind) * dt_common;
+                                    if (phi_arr(i, j, k, ind) < minspecden &&
                                         boundspecden)
                                     {
                                         phi_arr(i, j, k, ind) = minspecden;
@@ -597,7 +596,7 @@ void Vidyut::Evolve()
                     if (evolve_verbose)
                     {
                         amrex::Print()
-                        << "averaging state at iter:" << niter << "\n";
+                            << "averaging state at iter:" << niter << "\n";
                     }
 
                     MultiFab::LinComb(
@@ -610,7 +609,7 @@ void Vidyut::Evolve()
                 }
             }
             amrex::Print() << "\n================== Finished timestep iter:"
-            << niter + 1 << " ================\n";
+                           << niter + 1 << " ================\n";
         }
 
         AverageDown();
@@ -622,9 +621,9 @@ void Vidyut::Evolve()
             for (int lev = 0; lev <= finest_level; lev++)
             {
                 amrex::Print()
-                << "[Level " << lev << " step " << istep[lev] << "] ";
+                    << "[Level " << lev << " step " << istep[lev] << "] ";
                 amrex::Print()
-                << "Advanced " << CountCells(lev) << " cells" << std::endl;
+                    << "Advanced " << CountCells(lev) << " cells" << std::endl;
             }
         }
 
@@ -634,11 +633,11 @@ void Vidyut::Evolve()
         Real run_time = amrex::second() - strt_time;
 
         amrex::Print() << "Coarse STEP " << step + 1 << " ends."
-        << " TIME = " << cur_time << " DT = " << dt_common
-        << std::endl;
+                       << " TIME = " << cur_time << " DT = " << dt_common
+                       << std::endl;
         amrex::Print() << "Time step wall clock time:" << run_time << "\n";
         amrex::Print() << "===================================================="
-        "============\n";
+                          "============\n";
 
         if (plot_time > 0)
         {
@@ -683,17 +682,17 @@ void Vidyut::Evolve()
                 for (int locs = 0; locs < ncurrent_locs; locs++)
                 {
                     PrintToFile(intcurrentfilename)
-                    << integrated_conduction_currents[locs] << "\t";
+                        << integrated_conduction_currents[locs] << "\t";
                 }
                 for (int locs = 0; locs < ncurrent_locs; locs++)
                 {
                     PrintToFile(intcurrentfilename)
-                    << integrated_displacement_currents[locs] << "\t";
+                        << integrated_displacement_currents[locs] << "\t";
                 }
                 for (int locs = 0; locs < ncurrent_locs; locs++)
                 {
                     PrintToFile(intcurrentfilename)
-                    << integrated_current_areas[locs] << "\t";
+                        << integrated_current_areas[locs] << "\t";
                 }
                 PrintToFile(intcurrentfilename) << "\n";
             }
@@ -720,17 +719,17 @@ void Vidyut::Evolve()
             for (int locs = 0; locs < ncurrent_locs; locs++)
             {
                 PrintToFile(intcurrentfilename)
-                << integrated_conduction_currents[locs] << "\t";
+                    << integrated_conduction_currents[locs] << "\t";
             }
             for (int locs = 0; locs < ncurrent_locs; locs++)
             {
                 PrintToFile(intcurrentfilename)
-                << integrated_displacement_currents[locs] << "\t";
+                    << integrated_displacement_currents[locs] << "\t";
             }
             for (int locs = 0; locs < ncurrent_locs; locs++)
             {
                 PrintToFile(intcurrentfilename)
-                << integrated_current_areas[locs] << "\t";
+                    << integrated_current_areas[locs] << "\t";
             }
             PrintToFile(intcurrentfilename) << "\n";
         }
