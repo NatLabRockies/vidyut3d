@@ -529,20 +529,21 @@ void Vidyut::Evolve()
                     }
                 }
 
-                if (do_bg_reactions)
+                // for bg gas: always reset phi_new to phi_old to undo the
+                // transport solve (bg species density is prescribed/fixed).
+                // chemistry update only happens when do_bg_reactions is true.
+                for (unsigned int bgind = 0; bgind < bg_specid_list.size();
+                     bgind++)
                 {
-                    // for bg gas for which transport needn't be solved but
-                    // chemistry needs to be updated
-                    for (unsigned int bgind = 0; bgind < bg_specid_list.size();
-                         bgind++)
+                    int ind = bg_specid_list[bgind];
+                    // reset phi_new
+                    for (int lev = 0; lev <= finest_level; lev++)
                     {
-                        int ind = bg_specid_list[bgind];
-                        // reset phi_new
-                        for (int lev = 0; lev <= finest_level; lev++)
-                        {
-                            amrex::MultiFab::Copy(
-                                phi_new[lev], phi_old[lev], ind, ind, 1, 0);
-                        }
+                        amrex::MultiFab::Copy(
+                            phi_new[lev], phi_old[lev], ind, ind, 1, 0);
+                    }
+                    if (do_bg_reactions)
+                    {
                         for (int ilev = 0; ilev <= finest_level; ilev++)
                         {
                             amrex::Real minspecden = min_species_density;
