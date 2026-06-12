@@ -392,11 +392,11 @@ void Vidyut::Evolve()
                     auto it = std::find(
                         bg_specid_list.begin(), bg_specid_list.end(), ind);
 
-                    int iam_a_bgspecie = (it != bg_specid_list.end());
+                    const bool is_background_species = (it != bg_specid_list.end());
 
                     // transport solve is false if i am a background gas specie
                     // or electrons - electrons solve done already
-                    transport_solve_flag = !(iam_a_bgspecie || (ind == E_IDX));
+                    transport_solve_flag = !(is_background_species || (ind == E_IDX));
 
                     if (transport_solve_flag)
                     {
@@ -427,7 +427,7 @@ void Vidyut::Evolve()
                         }
                     }
 
-                    if (iam_a_bgspecie && do_bg_reactions)
+                    if (is_background_species && do_bg_reactions)
                     {
                         for (int ilev = 0; ilev <= finest_level; ilev++)
                         {
