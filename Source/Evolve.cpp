@@ -492,7 +492,7 @@ void Vidyut::Evolve()
                 if (NUM_NEUTRALS > 0)
                 {
                     // NUM_NEUTRALS includes all species other than background
-                    // gas bg gas for which transport neednt be solved
+                    // gas for which transport needn't be solved
                     int comp = FIRST_NEUTRAL;
                     for (comp = FIRST_NEUTRAL;
                          comp <=
@@ -529,9 +529,10 @@ void Vidyut::Evolve()
                     }
                 }
 
-                // for bg gas: always reset phi_new to phi_old to undo the
-                // transport solve (bg species density is prescribed/fixed).
-                // chemistry update only happens when do_bg_reactions is true.
+                // for background gas: always reset phi_new to phi_old to
+                // undo the transport solve (bg species density is
+                // prescribed/fixed). chemistry update only happens when
+                // do_bg_reactions is true.
                 for (unsigned int bgind = 0; bgind < bg_specid_list.size();
                      bgind++)
                 {
