@@ -531,7 +531,7 @@ void Vidyut::Evolve()
 
                 if (do_bg_reactions)
                 {
-                    // for bg gas for which transport neednt be solved but
+                    // for bg gas for which transport needn't be solved but
                     // chemistry needs to be updated
                     for (unsigned int bgind = 0; bgind < bg_specid_list.size();
                          bgind++)
