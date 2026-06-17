@@ -210,7 +210,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real specDiff(
     amrex::Real elecmob = specMob(E_ID, Te, ndens, emag, T);
     amrex::Real Te_in_ev = Te / eV;
     amrex::Real Tg_in_ev = T / eV;
-    amrex::Real dcoeff = 0.0;
+    amrex::Real dcoeff = 1e-12; // dummy value
 
     if (specid == E_ID)
     {

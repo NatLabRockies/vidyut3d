@@ -168,7 +168,7 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE amrex::Real specDiff(
     const amrex::Real emag,
     const amrex::Real T)
 {
-    amrex::Real dcoeff = 0.0;
+    amrex::Real dcoeff = 1e-12; // dummy value
     if (specid == NI_ID)
     {
         dcoeff = 1.0;
