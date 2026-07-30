@@ -142,24 +142,111 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     Real bc_value = (rb > Rmid)
         ? prob_parm.a_outer_dir * prob_parm.outer_voltage + prob_parm.b_outer_neumann * dphidn
         : prob_parm.a_inner_dir * prob_parm.inner_voltage - prob_parm.b_inner_neumann * dphidn;
-    amrex::Print()<< prob_parm.a_outer_dir << " "<< prob_parm.a_inner_dir << " "<< prob_parm.b_outer_neumann << " "<< prob_parm.b_inner_neumann << " "<< bc_value << "\n";
-    // Vector from reconstructed boundary point to interior cell center
+    // Keep original Dirichlet geometry path intact.
     Real ccibvec[AMREX_SPACEDIM];
     for (int d = 0; d < AMREX_SPACEDIM; ++d) ccibvec[d] = xi[d] - xb[d];
 
     Real d2 = 0.0_rt;
     for (int d = 0; d < AMREX_SPACEDIM; ++d) d2 += ccibvec[d] * ccibvec[d];
-
     if (d2 < 1.0e-24_rt) return;
 
-    auto sgn3 = [] AMREX_GPU_DEVICE (Real v) -> Real {
-        if (v >  1.0e-12_rt) return  1.0_rt;
+    auto sgn3 = [] AMREX_GPU_DEVICE(Real v) -> Real {
+        if (v > 1.0e-12_rt) return 1.0_rt;
         if (v < -1.0e-12_rt) return -1.0_rt;
         return 0.0_rt;
     };
 
-    Real outward_normal_dir = sgn3(ccibvec[dir]);
-    Real alpha = (ccibvec[dir] / d2) * outward_normal_dir;
+    const Real outward_normal_dir = sgn3(ccibvec[dir]);
+    const Real alpha_dir = (ccibvec[dir] / d2) * outward_normal_dir;
+    if (amrex::Math::abs(alpha_dir) < 1.0e-14_rt) return;
+    const Real coeff_dir = alpha_dir / dx[dir];
+
+    const Real hn = std::abs(distn);
+    if (hn < 1.0e-14_rt) return;
+
+    // This closure is only valid when this face is a covered/uncovered
+    // interface and the cut-face bcoeff has been nulled by null_bcoeff_at_ib.
+    AMREX_ASSERT((vf_l >= 1.0_rt && vf_r < 1.0_rt) ||
+                 (vf_l < 1.0_rt && vf_r >= 1.0_rt));
+
+    Real n_in[AMREX_SPACEDIM];
+    const Real nsign = (distn >= 0.0_rt) ? 1.0_rt : -1.0_rt;
+    for (int d = 0; d < AMREX_SPACEDIM; ++d) n_in[d] = nsign * n[d];
+
+    Real hstep = 0.0_rt;
+    for (int d = 0; d < AMREX_SPACEDIM; ++d)
+    {
+        hstep = amrex::max(hstep, std::abs(n_in[d]) * dx[d]);
+    }
+    if (hstep < 1.0e-14_rt) hstep = amrex::min(dx[0], dx[1]);
+
+    const Real h2 = hn + hstep;
+    const Real denom_h = h2 - hn;
+    if (denom_h < 1.0e-14_rt) return;
+
+    Real x_img[AMREX_SPACEDIM];
+    for (int d = 0; d < AMREX_SPACEDIM; ++d) x_img[d] = xb[d] + h2 * n_in[d];
+
+    const Real phi_i = sb_arr(intcell, POT_ID);
+    Real phi_ii = phi_i;
+
+#if (AMREX_SPACEDIM == 2)
+    const Real gx = (x_img[0] - prob_lo[0]) / dx[0] - 0.5_rt;
+    const Real gy = (x_img[1] - prob_lo[1]) / dx[1] - 0.5_rt;
+    const int i0 = static_cast<int>(std::floor(gx));
+    const int j0 = static_cast<int>(std::floor(gy));
+    const Real tx = gx - static_cast<Real>(i0);
+    const Real ty = gy - static_cast<Real>(j0);
+
+    Real wsum = 0.0_rt;
+    Real vsum = 0.0_rt;
+    for (int ii = 0; ii < 2; ++ii)
+    {
+        for (int jj = 0; jj < 2; ++jj)
+        {
+            const IntVect iv(AMREX_D_DECL(i0 + ii, j0 + jj, 0));
+            const bool in_domain = (iv[0] >= domlo[0] && iv[0] <= domhi[0] &&
+                                    iv[1] >= domlo[1] && iv[1] <= domhi[1]);
+            if (!in_domain) continue;
+            if (sb_arr(iv, CMASK_ID) < 1.0_rt) continue;
+
+            const Real wx = (ii == 0) ? (1.0_rt - tx) : tx;
+            const Real wy = (jj == 0) ? (1.0_rt - ty) : ty;
+            const Real w = wx * wy;
+            wsum += w;
+            vsum += w * sb_arr(iv, POT_ID);
+        }
+    }
+    if (wsum > 1.0e-14_rt)
+    {
+        phi_ii = vsum / wsum;
+    }
+    else
+    {
+        int major_dir = 0;
+        if (std::abs(n_in[1]) > std::abs(n_in[0])) major_dir = 1;
+        IntVect nb = intcell;
+        nb[major_dir] += (n_in[major_dir] >= 0.0_rt) ? 1 : -1;
+        const bool nb_in_domain =
+            (nb[0] >= domlo[0] && nb[0] <= domhi[0] && nb[1] >= domlo[1] &&
+             nb[1] <= domhi[1]);
+        if (nb_in_domain && sb_arr(nb, CMASK_ID) >= 1.0_rt)
+        {
+            phi_ii = sb_arr(nb, POT_ID);
+        }
+    }
+#endif
+
+    // Nonuniform 3-point one-sided derivative at the IB point:
+    // dphi/dn = c0*phi_b + c1*phi_i + c2*phi_ii
+    const Real c0 = -(hn + h2) / (hn * h2);
+    const Real c1 = h2 / (hn * (h2 - hn));
+    const Real c2 = -hn / (h2 * (h2 - hn));
+
+    // Keep the Robin denominator structure using alpha and absorb the
+    // higher-order term via beta.
+    const Real alpha = -c0;
+    const Real beta = c2 * (phi_ii - phi_i);
 
     if (amrex::Math::abs(alpha) < 1.0e-14_rt) return;
     // ---------------------------------------------------------------------
@@ -179,7 +266,7 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
         b = prob_parm.b_inner_neumann;
     }
 
-    const Real coeff = alpha / dx[dir];
+    const Real coeff = alpha / hn;
     constexpr Real eps = 1.0e-14_rt;
 
 //acoeff(intcell) +=
@@ -198,8 +285,9 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
 
         rhs(intcell, rhs_comp) +=
             coeff * (bc_value / a);*/
-      acoeff(intcell)+= (bscalar / ascalar) * bcoeff(intcell, 0.0) * coeff;   
-      rhs(intcell, rhs_comp) += (bscalar * bcoeff(intcell, 0.0)) * coeff * (bc_value / a);
+      acoeff(intcell)+= (bscalar / ascalar) * bcoeff(intcell, 0.0) * coeff_dir;
+      rhs(intcell, rhs_comp) +=
+          (bscalar * bcoeff(intcell, 0.0)) * coeff_dir * (bc_value / a);
     }
 
     // ---------------------------------------------------------------------
@@ -209,8 +297,10 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
 
    else if (std::abs(a) < eps && std::abs(b) > eps)
     {
-       rhs(intcell, rhs_comp) += (bscalar * bcoeff(intcell, 0.0)) * coeff * bc_value / (b * alpha);
-    } 
+      const Real grad_term = (bc_value / b) - beta;
+      rhs(intcell, rhs_comp) +=
+          (bscalar * bcoeff(intcell, 0.0)) * coeff * grad_term / alpha;
+   } 
     // Robin
     //      a * phi + b * dphi/dn = f
     // ---------------------------------------------------------------------
@@ -218,12 +308,14 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
 // Robin:  a * phi + b * dphi/dn = f
    else
     {
-        const Real denom = a + b * alpha;              
-        if (std::abs(denom) < eps) return;
+       const Real bc_eff = bc_value - b * beta;
+       const Real denom = a + b * alpha;              
+       if (std::abs(denom) < eps) return;
 
-        acoeff(intcell) += (bscalar / ascalar) * bcoeff(intcell, 0.0) * coeff * (a / denom);  
-        rhs(intcell, rhs_comp) += (bscalar * bcoeff(intcell, 0.0)) * coeff * bc_value / denom;   // unchanged form, correct denom
-    }
+       acoeff(intcell) += (bscalar / ascalar) * bcoeff(intcell, 0.0) * coeff * (a / denom);  
+       rhs(intcell, rhs_comp) +=
+           (bscalar * bcoeff(intcell, 0.0)) * coeff * bc_eff / denom;
+   }
 }
 
 
