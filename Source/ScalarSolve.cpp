@@ -389,8 +389,6 @@ void Vidyut::implicit_solve_scalar(
     Vector<int>& bc_hi,
     Vector<Array<MultiFab, AMREX_SPACEDIM>>& grad_fc)
 {
-    // BL_PROFILE("Vidyut::implicit_solve_species(" + std::to_string( spec_id )
-    // + ")");
     BL_PROFILE("Vidyut::implicit_solve_scalar()");
 
     // FIXME: add these as inputs
@@ -603,38 +601,10 @@ void Vidyut::implicit_solve_scalar(
 
         rhs[ilev].setVal(0.0);
 
-        /*LINCOMB cheat sheet==============
-         * \brief dst = a*x + b*y
-         *
-         * \param dst     destination FabArray
-         * \param a       scalar a
-         * \param x       FabArray x
-         * \param xcomp   starting component of x
-         * \param b       scalar b
-         * \param y       FabArray y
-         * \param ycomp   starting component of y
-         * \param dstcomp starting component of destination
-         * \param numcomp number of components
-         * \param nghost  number of ghost cells
-         static void LinComb (FabArray<FAB>& dst,
-         value_type a, const FabArray<FAB>& x, int xcomp,
-         value_type b, const FabArray<FAB>& y, int ycomp,
-         int dstcomp, int numcomp, const IntVect& nghost);
-         ====================================*/
-
         // adding U^n/dt and explicit sources
         MultiFab::LinComb(
             rhs[ilev], 1.0 / dt, Sborder_old[ilev], startspec, 1.0,
             dsdt_expl[ilev], startspec, 0, numspec, 0);
-
-        /*===============
-          static void Copy (MultiFab&       dst,
-          const MultiFab& src,
-          int             srccomp,
-          int             dstcomp,
-          int             numcomp,
-          int             nghost);
-          ================*/
 
         amrex::Copy(
             specdata[ilev], Sborder[ilev], startspec, 0, numspec, num_grow);
@@ -710,10 +680,6 @@ void Vidyut::implicit_solve_scalar(
             {
                 if (!geom[ilev].isPeriodic(idim))
                 {
-                    // note: bdryLo/bdryHi grabs the face indices from bx that
-                    // are the boundary since they are face indices, the bdry
-                    // normal index is 0/n+1, n is number of cells so the ghost
-                    // cell index at left side is i-1 while it is i on the right
                     if (bx.smallEnd(idim) == domain.smallEnd(idim))
                     {
                         amrex::ParallelFor(
@@ -920,8 +886,6 @@ void Vidyut::implicit_solve_scalar(
                     auto soln_arr = soln_arrays[nbx];
                     if (electron_flag)
                     {
-                        // FIXME: when electrons are solved
-                        // there will only be 1 component
                         if (soln_arr(i, j, k, 0) < minelecden)
                         {
                             soln_arr(i, j, k, 0) = minelecden;
@@ -952,20 +916,15 @@ void Vidyut::implicit_solve_scalar(
     }
     Print() << "\n";
 
-    if (electron_energy_flag)
+    /*if (electron_energy_flag)
     {
-        /*for(int ilev=0; ilev <= finest_level; ilev++)
-          {
-          phi_new[ilev].setVal(1.0,ETEMP_ID,1);
-          amrex::MultiFab::Multiply(phi_new[ilev],solution[ilev],EEN_ID,
-          ETEMP_ID, 1, 0);
-          amrex::MultiFab::Divide(phi_new[ilev],phi_new[ilev],EDN_ID, ETEMP_ID,
-          1, 0); phi_new[ilev].mult(twothird/K_B, ETEMP_ID, 1);
-          }*/
-
+ amrex::Print() << "EEN back-out: userdefspec=" << userdefspec
+                       << " (1 => ETEMP frozen at 1.0)\n";
         for (int ilev = 0; ilev <= finest_level; ilev++)
         {
             amrex::Real minetemp = min_electron_temp;
+            int userdefspec_l = userdefspec; // MMS guard (from line 449)
+            int eidx_l = eidx;
             auto phi_arrays = phi_new[ilev].arrays();
             auto sborder_arrays = Sborder[ilev].const_arrays();
             amrex::ParallelFor(
@@ -973,19 +932,32 @@ void Vidyut::implicit_solve_scalar(
                 [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
                     auto phi_arr = phi_arrays[nbx];
                     auto sb_arr = sborder_arrays[nbx];
-                    phi_arr(i, j, k, ETEMP_ID) = twothird / K_B *
-                                                 phi_arr(i, j, k, EEN_ID) /
-                                                 sb_arr(i, j, k, eidx);
-                    if (phi_arr(i, j, k, ETEMP_ID) < minetemp)
+
+                    if (userdefspec_l == 1)
                     {
-                        phi_arr(i, j, k, ETEMP_ID) = minetemp;
-                        phi_arr(i, j, k, EEN_ID) =
-                            1.5 * K_B * phi_arr(i, j, k, eidx) * minetemp;
+                        // MMS: EEN is a plain scalar (r^2/alpha + n0). Keep Te
+                        // frozen at the manufactured constant (initdomaindata
+                        // sets ETEMP = 1.0) so it does not corrupt the
+                        // ETEMP-dependent transport coefficients that S_manuf
+                        // was derived with. Do NOT overwrite EEN.
+                        phi_arr(i, j, k, ETEMP_ID) = 1.0;
+                    } else
+                    {
+                        // production: back out Te from energy density
+                        phi_arr(i, j, k, ETEMP_ID) = twothird / K_B *
+                                                     phi_arr(i, j, k, EEN_ID) /
+                                                     sb_arr(i, j, k, eidx_l);
+                        if (phi_arr(i, j, k, ETEMP_ID) < minetemp)
+                        {
+                            phi_arr(i, j, k, ETEMP_ID) = minetemp;
+                            phi_arr(i, j, k, EEN_ID) =
+                                1.5 * K_B * phi_arr(i, j, k, eidx_l) * minetemp;
+                        }
                     }
                 });
         }
     }
-
+    */
     // clean-up
     specdata.clear();
     acoeff.clear();

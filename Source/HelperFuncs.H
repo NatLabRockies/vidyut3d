@@ -122,6 +122,101 @@ amrex::Real get_efield_alongdir(
 
 AMREX_GPU_HOST_DEVICE
 AMREX_FORCE_INLINE
+amrex::Real get_efield_alongdir_eb(
+    int i,
+    int j,
+    int k,
+    int dir,
+    const GpuArray<int, AMREX_SPACEDIM> domlo,
+    const GpuArray<int, AMREX_SPACEDIM> domhi,
+    const GpuArray<Real, AMREX_SPACEDIM> dx,
+    Array4<Real> const& s_arr,
+    Array4<EBCellFlag const> const& flag) // <-- EB flags, valid everywhere
+{
+    IntVect cellid{AMREX_D_DECL(i, j, k)};
+    Real efield_dir = 0.0;
+
+    // A neighbour is usable if it is NOT covered (regular or cut both hold
+    // a solved/meaningful potential; covered cells do not).
+    auto valid = [&](const IntVect& iv)
+                     AMREX_GPU_DEVICE { return !flag(iv).isCovered(); };
+
+    if (cellid[dir] > domlo[dir] && cellid[dir] < domhi[dir])
+    {
+        IntVect ip1{AMREX_D_DECL(i, j, k)};
+        ip1[dir] += 1;
+        IntVect im1{AMREX_D_DECL(i, j, k)};
+        im1[dir] -= 1;
+
+        const bool okP = valid(ip1);
+        const bool okM = valid(im1);
+
+        if (okP && okM)
+        {
+            efield_dir =
+                -0.5 * (s_arr(ip1, POT_ID) - s_arr(im1, POT_ID)) / dx[dir];
+        } else if (okP && !okM)
+        {
+            IntVect ip2{AMREX_D_DECL(i, j, k)};
+            ip2[dir] += 2;
+            if (cellid[dir] + 2 <= domhi[dir] && valid(ip2))
+                efield_dir = -0.5 *
+                             (-s_arr(ip2, POT_ID) + 4.0 * s_arr(ip1, POT_ID) -
+                              3.0 * s_arr(cellid, POT_ID)) /
+                             dx[dir];
+            else
+                efield_dir =
+                    -(s_arr(ip1, POT_ID) - s_arr(cellid, POT_ID)) / dx[dir];
+        } else if (!okP && okM)
+        {
+            IntVect im2{AMREX_D_DECL(i, j, k)};
+            im2[dir] -= 2;
+            if (cellid[dir] - 2 >= domlo[dir] && valid(im2))
+                efield_dir = -0.5 *
+                             (s_arr(im2, POT_ID) - 4.0 * s_arr(im1, POT_ID) +
+                              3.0 * s_arr(cellid, POT_ID)) /
+                             dx[dir];
+            else
+                efield_dir =
+                    -(s_arr(cellid, POT_ID) - s_arr(im1, POT_ID)) / dx[dir];
+        } else
+        {
+            efield_dir = 0.0; // both sides covered along this axis
+        }
+    } else if (cellid[dir] == domlo[dir])
+    {
+        IntVect ip1{AMREX_D_DECL(i, j, k)};
+        ip1[dir] += 1;
+        IntVect ip2{AMREX_D_DECL(i, j, k)};
+        ip2[dir] += 2;
+        if (domhi[dir] - domlo[dir] > 2)
+            efield_dir = -0.5 *
+                         (-s_arr(ip2, POT_ID) + 4.0 * s_arr(ip1, POT_ID) -
+                          3.0 * s_arr(cellid, POT_ID)) /
+                         dx[dir];
+        else
+            efield_dir =
+                -(s_arr(ip1, POT_ID) - s_arr(cellid, POT_ID)) / dx[dir];
+    } else if (cellid[dir] == domhi[dir])
+    {
+        IntVect im1{AMREX_D_DECL(i, j, k)};
+        im1[dir] -= 1;
+        IntVect im2{AMREX_D_DECL(i, j, k)};
+        im2[dir] -= 2;
+        if (domhi[dir] - domlo[dir] > 2)
+            efield_dir = -0.5 *
+                         (s_arr(im2, POT_ID) - 4.0 * s_arr(im1, POT_ID) +
+                          3.0 * s_arr(cellid, POT_ID)) /
+                         dx[dir];
+        else
+            efield_dir =
+                -(s_arr(cellid, POT_ID) - s_arr(im1, POT_ID)) / dx[dir];
+    }
+    return efield_dir;
+}
+
+AMREX_GPU_HOST_DEVICE
+AMREX_FORCE_INLINE
 amrex::Real get_applied_potential(
     Real current_time,
     int domain_end,
