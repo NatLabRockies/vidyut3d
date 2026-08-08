@@ -18,16 +18,31 @@ do
     cd ..
 done
 
-#for DIM in 512 1024 2048 
+for DIM in 512 1024 
 do
     mkdir -p "${DIM}"
 
     cd "${DIM}"
 
     rm -rf plt* chk*
-    mpirun -np 8 ../vidyut2d.llvm.MPI.ex ../inputs2d max_step=10 amr.n_cell="${DIM}" "${DIM}" 1
+    mpirun -np 4 ../vidyut2d.llvm.MPI.ex ../inputs2d max_step=10 amr.n_cell="${DIM}" "${DIM}" 1 
     #ls -1v plt*/Header | tee movie.visit
 
     cd ..
 done
+
+for DIM in 2048
+do
+    mkdir -p "${DIM}"
+
+    cd "${DIM}"
+
+    rm -rf plt* chk*
+    mpirun -np 8 ../vidyut2d.llvm.MPI.ex ../inputs2d max_step=10 amr.n_cell="${DIM}" "${DIM}" 1 
+    #ls -1v plt*/Header | tee movie.visit
+
+    cd ..
+done
+
+
 

@@ -77,8 +77,6 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     Real Tg,
     Real Pg)
 {
-    if (solved_comp != POT_ID) return;
-
     IntVect lcell = face;
     IntVect rcell = face;
     lcell[dir] -= 1;
@@ -86,9 +84,12 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     Real vf_l = sb_arr(lcell, CMASK_ID);
     Real vf_r = sb_arr(rcell, CMASK_ID);
 
+    // Interior (solve) cell: the fluid side (higher volume fraction).
     IntVect intcell = (vf_l >= vf_r) ? lcell : rcell;
 
-    // Interior cell center
+  
+
+    // Interior cell center (from the fluid interior cell)
     Real xi[AMREX_SPACEDIM];
     xi[0] = prob_lo[0] + (intcell[0] + 0.5_rt) * dx[0];
     xi[1] = prob_lo[1] + (intcell[1] + 0.5_rt) * dx[1];
@@ -96,7 +97,7 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     xi[2] = prob_lo[2] + (intcell[2] + 0.5_rt) * dx[2];
 #endif
 
-    // Seed boundary point from EB data
+     // EB centroid seed from cut cell
     Real xb_seed[AMREX_SPACEDIM];
     xb_seed[0] = sb_arr(intcell, CPX_ID);
     xb_seed[1] = sb_arr(intcell, CPY_ID);
@@ -104,7 +105,7 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     xb_seed[2] = sb_arr(intcell, CPZ_ID);
 #endif
 
-    // Local EB normal from EB data
+    // EB normal from cut cell
     Real n[AMREX_SPACEDIM];
     n[0] = sb_arr(intcell, NX_ID);
     n[1] = sb_arr(intcell, NY_ID);
@@ -142,7 +143,6 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     Real bc_value = (rb > Rmid)
         ? prob_parm.a_outer_dir * prob_parm.outer_voltage + prob_parm.b_outer_neumann * dphidn
         : prob_parm.a_inner_dir * prob_parm.inner_voltage - prob_parm.b_inner_neumann * dphidn;
-    amrex::Print()<< prob_parm.a_outer_dir << " "<< prob_parm.a_inner_dir << " "<< prob_parm.b_outer_neumann << " "<< prob_parm.b_inner_neumann << " "<< bc_value << "\n";
     // Vector from reconstructed boundary point to interior cell center
     Real ccibvec[AMREX_SPACEDIM];
     for (int d = 0; d < AMREX_SPACEDIM; ++d) ccibvec[d] = xi[d] - xb[d];

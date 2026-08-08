@@ -23,7 +23,7 @@ amr.regrid_int      = 1       # how often to regrid
 
 # TIME STEP CONTROL
 vidyut.dt             = 1e-13
-vidyut.num_timestep_correctors = 3
+vidyut.num_timestep_correctors = 1
 vidyut.hyp_order = 5
 
 vidyut.user_defined_potential = 1
@@ -43,8 +43,8 @@ prob.inner_voltage=10.0
 prob.outer_voltage=20.0
 prob.a_inner_dir = 1.0
 prob.b_inner_neumann = 0.0
-prob.a_outer_dir = 0.5
-prob.b_outer_neumann = 0.5
+prob.a_outer_dir = 1.0
+prob.b_outer_neumann = 0.0
 
 vidyut.pot_bc_lo = 0 0
 vidyut.pot_bc_hi = 0 0
