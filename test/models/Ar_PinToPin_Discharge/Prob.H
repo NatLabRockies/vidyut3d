@@ -65,7 +65,7 @@ void initdomaindata(
     phiArr[0] = prob_hi[0];
     phiArr[1] = prob_hi[1];
 
-    amrex::Real floorden = 1e10;
+    amrex::Real floorden = 1e12;
 
     int chrgspec[NUM_SPECIES] = {0};
     CKCHRG(chrgspec);
@@ -109,11 +109,6 @@ void initdomaindata(
                 if (gasvfrac < 1.0)
                 {
                     phi(i, j, k, CMASK_ID) = 0.0;
-                }
-
-                for (int sp = 0; sp < NUM_SPECIES; sp++)
-                {
-                    phi(i, j, k, sp) = 1e12;
                 }
 
                 phi(i, j, k, AR_ID) = prob_parm->pres / K_B / prob_parm->temp;
