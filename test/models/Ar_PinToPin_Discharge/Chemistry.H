@@ -9,7 +9,6 @@
 /* Elements
    0  E
    1  Ar
-   2 H
    */
 
 // Species
