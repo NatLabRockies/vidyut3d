@@ -24,7 +24,6 @@ void amrex_probinit(ProbParm& h_prob_parm, ProbParm& d_prob_parm)
     pp.query("V1", h_prob_parm.V1);
     pp.query("ionden_init", h_prob_parm.ionden_init);
     pp.query("gama", h_prob_parm.gama);
-    pp.query("pulse_freq", h_prob_parm.pulse_freq);
     pp.query("tpulse", h_prob_parm.tpulse);
     pp.query("ramptime", h_prob_parm.ramptime);
     pp.query("seedionden", h_prob_parm.seedionden);
