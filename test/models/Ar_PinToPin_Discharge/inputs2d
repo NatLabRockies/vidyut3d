@@ -1,5 +1,5 @@
 max_step  = 20000000
-stop_time = 7000e-9
+stop_time = 21.0e-9
 
 # PROBLEM SIZE & GEOMETRY
 geometry.is_periodic =  0  0  1
