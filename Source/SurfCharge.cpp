@@ -111,6 +111,7 @@ void Vidyut::update_surf_charge(
 
             Array4<Real> sb_arr = Sborder[ilev].array(mfi);
             Array4<Real> phi_arr = phi_new[ilev].array(mfi);
+            Array4<Real> phiold_arr = phi_old[ilev].array(mfi);
             Real time = current_time; // for GPU capture
 
             for (int idim = 0; idim < AMREX_SPACEDIM; ++idim)
@@ -136,7 +137,12 @@ void Vidyut::update_surf_charge(
                                 amrex::Real q_times_flux = charge_flux(
                                     i, j, k, sign, idim, eidx, dx, gastemp,
                                     sb_arr);
-                                phi_arr(icell, SRFCH_ID) +=
+                                // advance from the old time level, this
+                                // function is called once per timestep
+                                // corrector and phi_new holds the averaged
+                                // state after the first iteration
+                                phi_arr(icell, SRFCH_ID) =
+                                    phiold_arr(icell, SRFCH_ID) +
                                     q_times_flux * tstep;
                             }
                         });
@@ -159,7 +165,12 @@ void Vidyut::update_surf_charge(
                                 amrex::Real q_times_flux = charge_flux(
                                     i, j, k, sign, idim, eidx, dx, gastemp,
                                     sb_arr);
-                                phi_arr(icell, SRFCH_ID) +=
+                                // advance from the old time level, this
+                                // function is called once per timestep
+                                // corrector and phi_new holds the averaged
+                                // state after the first iteration
+                                phi_arr(icell, SRFCH_ID) =
+                                    phiold_arr(icell, SRFCH_ID) +
                                     q_times_flux * tstep;
                             }
                         });
