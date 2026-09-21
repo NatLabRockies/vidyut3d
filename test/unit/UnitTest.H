@@ -112,6 +112,13 @@ inline int run_all(const std::string& filter)
     amrex::Print() << "\n"
                    << ntests - nfailed_tests << " of " << ntests
                    << " tests passed\n";
+    if (ntests == 0)
+    {
+        // a mistyped filter must not look like a successful run
+        amrex::Print() << "FAILED: no test matches unittest.filter = \""
+                       << filter << "\"\n";
+        return 1;
+    }
     return nfailed_tests;
 }
 } // namespace unittest

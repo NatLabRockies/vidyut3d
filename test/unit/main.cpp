@@ -317,8 +317,8 @@ UT_TEST(weno_reconstruct_mirror_symmetry)
     // left and from the right
     for (int scheme = 1; scheme <= 3; scheme++)
     {
-        auto vals = unittest::device_eval(
-            2, [=] AMREX_GPU_DEVICE(int n, Real* out) {
+        auto vals =
+            unittest::device_eval(2, [=] AMREX_GPU_DEVICE(int n, Real* out) {
                 Real umhalf, uphalf;
                 weno_reconstruct(
                     0.3, 1.1, 2.0, 2.0, 1.1, 0.3, umhalf, uphalf, scheme);
