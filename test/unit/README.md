@@ -38,3 +38,5 @@ make -j 4 CASE_DIR=../models/Ar_DBD
 Add a `UT_TEST(name) { ... }` block to `main.cpp`. Functions that are
 `AMREX_GPU_DEVICE` only have to be evaluated through `unittest::device_eval`,
 which runs them in an `amrex::ParallelFor` and copies the results to the host.
+The callback has to be declared as
+`[=] AMREX_GPU_DEVICE(int n, Real* out) { ... }`.

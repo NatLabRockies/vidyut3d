@@ -62,15 +62,16 @@ inline void check_close(
     if (!(std::abs(val - ref) <= tol * scale))
     {
         report_failure(
-            std::string(expr) + ": got " + std::to_string(val) +
-                ", expected " + std::to_string(ref),
+            std::string(expr) + ": got " + std::to_string(val) + ", expected " +
+                std::to_string(ref),
             file, line);
     }
 }
 
 // Evaluate func(n, out) for n in [0, nvals) on the device (a plain loop in a
 // CPU build) and return the values on the host. Use this for functions that
-// are AMREX_GPU_DEVICE only.
+// are AMREX_GPU_DEVICE only. func has to be device callable, i.e. a lambda
+// declared as [=] AMREX_GPU_DEVICE(int n, amrex::Real* out).
 template <typename F>
 amrex::Vector<amrex::Real> device_eval(const int nvals, F const& func)
 {

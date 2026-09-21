@@ -29,10 +29,7 @@ GpuArray<Real, AMREX_SPACEDIM> cell_sizes()
     return {AMREX_D_DECL(0.1, 0.05, 0.025)};
 }
 
-Box test_box()
-{
-    return Box(IntVect::TheZeroVector(), IntVect(ncells - 1));
-}
+Box test_box() { return Box(IntVect::TheZeroVector(), IntVect(ncells - 1)); }
 
 // fills component comp with the quadratic (or a linear function when
 // linear_only is set) of the cell-center coordinate along dir
@@ -177,8 +174,7 @@ UT_TEST(applied_potential_profiles)
         get_applied_potential(0.0, -1, 1, vlo, vhi, freq, vdur, vcen), 0.0,
         tight_tol);
     UT_CHECK_CLOSE(
-        get_applied_potential(
-            0.25 / freq, -1, 1, vlo, vhi, freq, vdur, vcen),
+        get_applied_potential(0.25 / freq, -1, 1, vlo, vhi, freq, vdur, vcen),
         vlo, tight_tol);
     UT_CHECK_CLOSE(
         get_applied_potential(0.75 / freq, 1, 1, vlo, vhi, freq, vdur, vcen),
@@ -197,24 +193,23 @@ UT_TEST(applied_potential_profiles)
             vcen + 0.25 * vdur, -1, 2, vlo, vhi, freq, vdur, vcen),
         0.5 * vlo, tight_tol);
     UT_CHECK_CLOSE(
-        get_applied_potential(
-            vcen - vdur, -1, 2, vlo, vhi, freq, vdur, vcen),
+        get_applied_potential(vcen - vdur, -1, 2, vlo, vhi, freq, vdur, vcen),
         0.0, tight_tol);
     UT_CHECK_CLOSE(
-        get_applied_potential(
-            vcen + vdur, -1, 2, vlo, vhi, freq, vdur, vcen),
+        get_applied_potential(vcen + vdur, -1, 2, vlo, vhi, freq, vdur, vcen),
         0.0, tight_tol);
 }
 
 UT_TEST(minmod_limiter_values)
 {
-    auto vals = unittest::device_eval(5, [=](int n, Real* out) {
-        if (n == 0) out[n] = minmod_limiter(0.5, 1.0);  // 0 < r < 1
-        if (n == 1) out[n] = minmod_limiter(3.0, 1.0);  // r > 1
-        if (n == 2) out[n] = minmod_limiter(-1.0, 1.0); // extremum
-        if (n == 3) out[n] = minmod_limiter(1.0, 0.0);  // flat on the right
-        if (n == 4) out[n] = minmod_limiter(0.0, 1.0);  // flat on the left
-    });
+    auto vals =
+        unittest::device_eval(5, [=] AMREX_GPU_DEVICE(int n, Real* out) {
+            if (n == 0) out[n] = minmod_limiter(0.5, 1.0);  // 0 < r < 1
+            if (n == 1) out[n] = minmod_limiter(3.0, 1.0);  // r > 1
+            if (n == 2) out[n] = minmod_limiter(-1.0, 1.0); // extremum
+            if (n == 3) out[n] = minmod_limiter(1.0, 0.0);  // flat on the right
+            if (n == 4) out[n] = minmod_limiter(0.0, 1.0);  // flat on the left
+        });
     UT_CHECK_CLOSE(vals[0], 0.5, tight_tol);
     UT_CHECK_CLOSE(vals[1], 1.0, tight_tol);
     UT_CHECK_CLOSE(vals[2], 0.0, tight_tol);
@@ -233,17 +228,18 @@ UT_TEST(gradlimiter_is_one_for_linear_data)
         Array4<Real> arr = fab.array();
         IntVect iv(2);
         iv[dir] = 3;
-        auto vals = unittest::device_eval(1, [=](int n, Real* out) {
-            out[n] = get_gradlimiter(
-                AMREX_D_DECL(iv[0], iv[1], iv[2]),
+        auto vals =
+            unittest::device_eval(1, [=] AMREX_GPU_DEVICE(int n, Real* out) {
+                out[n] = get_gradlimiter(
+                    AMREX_D_DECL(iv[0], iv[1], iv[2]),
 #if AMREX_SPACEDIM < 3
-                0,
+                    0,
 #if AMREX_SPACEDIM < 2
-                0,
+                    0,
 #endif
 #endif
-                0, dir, arr);
-        });
+                    0, dir, arr);
+            });
         UT_CHECK_CLOSE(vals[0], 1.0, tight_tol);
     }
 }
@@ -257,11 +253,12 @@ UT_TEST(weno_constant_and_linear_data)
     // not depend on the nonlinear weights
     for (int scheme = 1; scheme <= 3; scheme++)
     {
-        auto vals = unittest::device_eval(3, [=](int n, Real* out) {
-            if (n == 0) out[n] = weno(7.0, 7.0, 7.0, 7.0, 7.0, scheme);
-            if (n == 1) out[n] = weno(1.0, 3.0, 5.0, 7.0, 9.0, scheme);
-            if (n == 2) out[n] = weno(9.0, 7.0, 5.0, 3.0, 1.0, scheme);
-        });
+        auto vals =
+            unittest::device_eval(3, [=] AMREX_GPU_DEVICE(int n, Real* out) {
+                if (n == 0) out[n] = weno(7.0, 7.0, 7.0, 7.0, 7.0, scheme);
+                if (n == 1) out[n] = weno(1.0, 3.0, 5.0, 7.0, 9.0, scheme);
+                if (n == 2) out[n] = weno(9.0, 7.0, 5.0, 3.0, 1.0, scheme);
+            });
         UT_CHECK_CLOSE(vals[0], 7.0, tight_tol);
         UT_CHECK_CLOSE(vals[1], 6.0, tight_tol);
         UT_CHECK_CLOSE(vals[2], 4.0, tight_tol);
@@ -274,21 +271,22 @@ UT_TEST(weno_smooth_data_fifth_order)
     // about 2^5 when the cell size is halved
     for (int scheme = 1; scheme <= 3; scheme++)
     {
-        auto vals = unittest::device_eval(2, [=](int n, Real* out) {
-            const Real h = (n == 0) ? 0.1 : 0.05;
-            const Real x0 = 0.4; // face location
-            Real avg[5];
-            for (int c = 0; c < 5; c++)
-            {
-                // cells i-2..i+2, cell i ends at x0
-                const Real xl = x0 + (c - 3) * h;
-                const Real xr = xl + h;
-                avg[c] = (std::cos(xl) - std::cos(xr)) / h;
-            }
-            out[n] = std::abs(
-                weno(avg[0], avg[1], avg[2], avg[3], avg[4], scheme) -
-                std::sin(x0));
-        });
+        auto vals =
+            unittest::device_eval(2, [=] AMREX_GPU_DEVICE(int n, Real* out) {
+                const Real h = (n == 0) ? 0.1 : 0.05;
+                const Real x0 = 0.4; // face location
+                Real avg[5];
+                for (int c = 0; c < 5; c++)
+                {
+                    // cells i-2..i+2, cell i ends at x0
+                    const Real xl = x0 + (c - 3) * h;
+                    const Real xr = xl + h;
+                    avg[c] = (std::cos(xl) - std::cos(xr)) / h;
+                }
+                out[n] = std::abs(
+                    weno(avg[0], avg[1], avg[2], avg[3], avg[4], scheme) -
+                    std::sin(x0));
+            });
         UT_CHECK(vals[0] < 1.0e-5);
         UT_CHECK(vals[0] / vals[1] > 20.0);
     }
@@ -298,12 +296,13 @@ UT_TEST(weno_step_data_stays_bounded)
 {
     for (int scheme = 1; scheme <= 3; scheme++)
     {
-        auto vals = unittest::device_eval(4, [=](int n, Real* out) {
-            if (n == 0) out[n] = weno(0.0, 0.0, 0.0, 1.0, 1.0, scheme);
-            if (n == 1) out[n] = weno(0.0, 0.0, 1.0, 1.0, 1.0, scheme);
-            if (n == 2) out[n] = weno(1.0, 1.0, 1.0, 0.0, 0.0, scheme);
-            if (n == 3) out[n] = weno(1.0, 1.0, 0.0, 0.0, 0.0, scheme);
-        });
+        auto vals =
+            unittest::device_eval(4, [=] AMREX_GPU_DEVICE(int n, Real* out) {
+                if (n == 0) out[n] = weno(0.0, 0.0, 0.0, 1.0, 1.0, scheme);
+                if (n == 1) out[n] = weno(0.0, 0.0, 1.0, 1.0, 1.0, scheme);
+                if (n == 2) out[n] = weno(1.0, 1.0, 1.0, 0.0, 0.0, scheme);
+                if (n == 3) out[n] = weno(1.0, 1.0, 0.0, 0.0, 0.0, scheme);
+            });
         for (int n = 0; n < 4; n++)
         {
             UT_CHECK(vals[n] > -1.0e-3);
@@ -318,50 +317,54 @@ UT_TEST(weno_reconstruct_mirror_symmetry)
     // left and from the right
     for (int scheme = 1; scheme <= 3; scheme++)
     {
-        auto vals = unittest::device_eval(2, [=](int /*n*/, Real* out) {
-            Real umhalf, uphalf;
-            weno_reconstruct(
-                0.3, 1.1, 2.0, 2.0, 1.1, 0.3, umhalf, uphalf, scheme);
-            out[0] = umhalf;
-            out[1] = uphalf;
-        });
+        auto vals = unittest::device_eval(
+            2, [=] AMREX_GPU_DEVICE(int /*n*/, Real* out) {
+                Real umhalf, uphalf;
+                weno_reconstruct(
+                    0.3, 1.1, 2.0, 2.0, 1.1, 0.3, umhalf, uphalf, scheme);
+                out[0] = umhalf;
+                out[1] = uphalf;
+            });
         UT_CHECK_CLOSE(vals[0], vals[1], tight_tol);
     }
 }
 
 UT_TEST(upwind_flux_direction)
 {
-    auto vals = unittest::device_eval(2, [=](int n, Real* out) {
-        if (n == 0) out[n] = get_firstorder_upwind_flux(2.0, 2.0, 3.0, 5.0);
-        if (n == 1) out[n] = get_firstorder_upwind_flux(-2.0, -2.0, 3.0, 5.0);
-    });
+    auto vals =
+        unittest::device_eval(2, [=] AMREX_GPU_DEVICE(int n, Real* out) {
+            if (n == 0) out[n] = get_firstorder_upwind_flux(2.0, 2.0, 3.0, 5.0);
+            if (n == 1)
+                out[n] = get_firstorder_upwind_flux(-2.0, -2.0, 3.0, 5.0);
+        });
     UT_CHECK_CLOSE(vals[0], 6.0, tight_tol);
     UT_CHECK_CLOSE(vals[1], -10.0, tight_tol);
 }
 
 UT_TEST(waf_flux_limits)
 {
-    auto vals = unittest::device_eval(4, [=](int n, Real* out) {
-        const Real vel = 2.0;
-        const Real dx = 0.1;
-        const Real dt = 0.01; // c = 0.2
-        // uniform state
-        if (n == 0)
-            out[n] = get_secondorder_WAF_flux(
-                vel, vel, 4.0, 4.0, 4.0, 4.0, dx, dt);
-        // extremum on the upwind side, limiter = 1, upwind flux
-        if (n == 1)
-            out[n] = get_secondorder_WAF_flux(
-                vel, vel, 5.0, 3.0, 5.0, 7.0, dx, dt);
-        // linear data, limiter = |c|, Lax-Wendroff flux
-        if (n == 2)
-            out[n] = get_secondorder_WAF_flux(
-                vel, vel, 1.0, 3.0, 5.0, 7.0, dx, dt);
-        // same with negative velocity
-        if (n == 3)
-            out[n] = get_secondorder_WAF_flux(
-                -vel, -vel, 1.0, 3.0, 5.0, 7.0, dx, dt);
-    });
+    auto vals =
+        unittest::device_eval(4, [=] AMREX_GPU_DEVICE(int n, Real* out) {
+            const Real vel = 2.0;
+            const Real dx = 0.1;
+            const Real dt = 0.01; // c = 0.2
+            // uniform state
+            if (n == 0)
+                out[n] = get_secondorder_WAF_flux(
+                    vel, vel, 4.0, 4.0, 4.0, 4.0, dx, dt);
+            // extremum on the upwind side, limiter = 1, upwind flux
+            if (n == 1)
+                out[n] = get_secondorder_WAF_flux(
+                    vel, vel, 5.0, 3.0, 5.0, 7.0, dx, dt);
+            // linear data, limiter = |c|, Lax-Wendroff flux
+            if (n == 2)
+                out[n] = get_secondorder_WAF_flux(
+                    vel, vel, 1.0, 3.0, 5.0, 7.0, dx, dt);
+            // same with negative velocity
+            if (n == 3)
+                out[n] = get_secondorder_WAF_flux(
+                    -vel, -vel, 1.0, 3.0, 5.0, 7.0, dx, dt);
+        });
     UT_CHECK_CLOSE(vals[0], 8.0, tight_tol);
     UT_CHECK_CLOSE(vals[1], 6.0, tight_tol);
     // 0.5*(fL+fR) - 0.5*c*(fR-fL) = 8 - 0.5*0.2*4
