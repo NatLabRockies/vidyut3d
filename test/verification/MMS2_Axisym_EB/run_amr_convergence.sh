@@ -39,5 +39,5 @@ for spec in "$@"; do
             amr.n_cell=$n $n amr.max_level=2 amr.n_error_buf=$buf \
             vidyut.refine_cutcells=1 amr.plot_int=$STEPS amr.chk_int=-1 > log 2>&1)
     echo "amr base $n + 2 levels (effective $((n*4)), n_error_buf=$buf) done"
-    grep -q "WARNING: a coarse-fine" "$d/log" && echo "  *** clearance warning, see $d/log"
+    grep -q "WARNING: a coarse-fine" "$d/log" && echo "  *** clearance warning, see $d/log" || true
 done

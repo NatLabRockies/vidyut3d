@@ -559,6 +559,7 @@ void Vidyut::ReadParameters()
 #ifdef AMREX_USE_HYPRE
         pp.query("use_hypre", use_hypre);
 #endif
+        pp.query("freeze_etemp", freeze_etemp);
         pp.query("using_ib", using_ib);
         pp.query("ib_identity_rows", ib_identity_rows);
         pp.query("ib_cf_clearance_warn", ib_cf_clearance_warn);

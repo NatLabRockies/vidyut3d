@@ -397,6 +397,13 @@ public:
     // Electron species index
     int E_IDX = 0;
 
+    // Keep the electron temperature at its initial value instead of backing it
+    // out of the solved energy density. Needed by manufactured solutions where
+    // EEN is a plain scalar and a backed-out Te would corrupt the
+    // ETEMP-dependent transport coefficients the source term was derived with.
+    // Off by default, so an ordinary run backs Te out as it always has.
+    int freeze_etemp = 0;
+
     int using_ib = 0;
 
     // How the solid cells are kept out of the linear solve. Two ways exist

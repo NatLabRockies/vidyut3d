@@ -110,3 +110,9 @@ vidyut.linsolve_abstol = 1.0e-14
 vidyut.linsolve_maxiter = 1000
 
 
+
+# The manufactured EEN here is a plain scalar, so Te must stay at the constant
+# initdomaindata sets rather than being backed out of the energy density, which
+# would corrupt the ETEMP-dependent transport coefficients the source term was
+# derived with. See vidyut.freeze_etemp in Source/Vidyut.H.
+vidyut.freeze_etemp = 1
