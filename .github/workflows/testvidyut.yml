@@ -115,6 +115,22 @@ jobs:
           cd GEC_RF_Cell
           mpirun -n 2 ./*.ex inputs max_step=100
           mv plt00001 dev-plt00001
+    - name: Build EB Case
+      working-directory: ./test/verification/Laplace_2D_RobinBC_Test_EB/
+      run: |
+        ccache -z
+        make -j 2 USE_CCACHE=TRUE COMP=gnu USE_EB=TRUE
+        ccache -s
+    - name: Build fextrema
+      working-directory: ./Submodules/amrex/Tools/Plotfile
+      run: |
+        make -j 2 USE_CCACHE=TRUE COMP=gnu programs=fextrema
+    - name: Run EB Case
+      working-directory: ./test/verification/Laplace_2D_RobinBC_Test_EB/
+      run: |
+        mpirun -n 2 ./*.ex inputs2d
+        ../../../Submodules/amrex/Tools/Plotfile/fextrema*.ex -v Potential plt00001 | tee extrema.txt
+        python3 check_bounds.py extrema.txt
     - name: Checkout Reference Version
       if: env.DO_REF_COMPARE == 'true'
       run : |
