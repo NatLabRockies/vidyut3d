@@ -71,11 +71,28 @@ mpirun -np 4 ./*.ex inputs2d amr.max_level=1 amr.n_error_buf=8 amr.blocking_fact
 
 **This does not run to completion yet.** The hierarchy is built and the
 potential solve converges on it (21 `hypre` iterations, relative residual
-$6\times10^{-13}$), but the implicit species solve does not: it stops at a
-relative residual of $6\times10^{-5}$ after 1000 iterations and aborts in
-`ScalarSolve.cpp`. The masked cells cannot be coarsened and the coarsening limit
-is taken from the coarsest level, which the potential solve survives with
-`hypre` as the bottom solver and the species solve does not. Refining on the
-gradient of the mask instead of the cut cells fails in the same place, so it is
-the species solve and not the refinement criterion. The uniform-grid results
-above are unaffected.
+$6\times10^{-13}$), but the implicit species solve stops at a relative residual
+of $6\times10^{-5}$ after 1000 iterations and aborts in `ScalarSolve.cpp`.
+
+What the failure needs, established by elimination:
+
+| varied | result |
+|---|---|
+| `hypre` on or off, `linsolve_max_coarsening_level` 0 or 10 | fails either way |
+| `linsolve_reltol` 1e-12, 1e-8, 1e-6 | fails either way, residual floors at 6.9e6 |
+| cut-cell or mask-gradient refinement | fails at the same line |
+| same case at `amr.max_level=0` | each species converges in **3** iterations |
+| planar immersed boundary instead of a curved one (`MMS2`, `inputs_x`) | 200 steps, species in 6--7 iterations |
+| potential alone on this geometry (`Laplace_2D_SecondOrder`) | converges, 20--24 iterations |
+| refined region covering the whole domain, no coarse--fine interface | 720 steps, species in 9--10 iterations |
+
+So it takes all three of a curved wall, a coarse--fine interface and the species
+equation; any two of them are fine. Widening the refined band does not help
+until the band covers everything, at which point there is no interface left and
+the hierarchy is a uniform fine grid. Forcing the levels to agree about which
+cells are active does not help either, in either direction: switching the
+covered coarse cut cells on destroys the solution, because the wall closure is
+keyed to `cellmask` and not to the solver mask, and switching the fine cells
+under them off leaves the residual floor exactly where it was.
+
+The uniform-grid results above are unaffected.
