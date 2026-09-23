@@ -7,6 +7,7 @@
 #include <AMReX_Print.H>
 #include <AMReX_Vector.H>
 #include <AMReX_Gpu.H>
+#include <AMReX_GpuLaunch.H>
 
 // Minimal test harness, no dependency other than AMReX.
 //

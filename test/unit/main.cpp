@@ -1,6 +1,7 @@
 #include <AMReX.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_FArrayBox.H>
+#include <AMReX_Loop.H>
 #include <ProbParm.H>
 #include <Chemistry.H>
 #include <VarDefines.H>
@@ -313,18 +314,34 @@ UT_TEST(weno_step_data_stays_bounded)
 
 UT_TEST(weno_reconstruct_mirror_symmetry)
 {
-    // data symmetric about the i+1/2 face gives the same value from the
-    // left and from the right
+    // uphalf is the i+1/2 value from the left stencil i-2..i+2, umhalf the
+    // one from the right stencil i+3..i-1. The data is not symmetric, so
+    // reversing it has to swap the two, which a wrong argument order in
+    // either call would break
     for (int scheme = 1; scheme <= 3; scheme++)
     {
         auto vals =
-            unittest::device_eval(2, [=] AMREX_GPU_DEVICE(int n, Real* out) {
-                Real umhalf, uphalf;
+            unittest::device_eval(6, [=] AMREX_GPU_DEVICE(int n, Real* out) {
+                const Real u[6] = {0.3, 1.1, 2.0, 2.6, 1.4, 0.9};
+                Real umhalf, uphalf, umhalf_rev, uphalf_rev;
                 weno_reconstruct(
-                    0.3, 1.1, 2.0, 2.0, 1.1, 0.3, umhalf, uphalf, scheme);
-                out[n] = (n == 0) ? umhalf : uphalf;
+                    u[0], u[1], u[2], u[3], u[4], u[5], umhalf, uphalf, scheme);
+                weno_reconstruct(
+                    u[5], u[4], u[3], u[2], u[1], u[0], umhalf_rev, uphalf_rev,
+                    scheme);
+                if (n == 0) out[n] = uphalf;
+                if (n == 1) out[n] = umhalf_rev;
+                if (n == 2) out[n] = umhalf;
+                if (n == 3) out[n] = uphalf_rev;
+                if (n == 4) out[n] = weno(u[0], u[1], u[2], u[3], u[4], scheme);
+                if (n == 5) out[n] = weno(u[5], u[4], u[3], u[2], u[1], scheme);
             });
         UT_CHECK_CLOSE(vals[0], vals[1], tight_tol);
+        UT_CHECK_CLOSE(vals[2], vals[3], tight_tol);
+        UT_CHECK_CLOSE(vals[0], vals[4], tight_tol);
+        UT_CHECK_CLOSE(vals[2], vals[5], tight_tol);
+        // the two sides differ, otherwise the checks above prove nothing
+        UT_CHECK(std::abs(vals[0] - vals[2]) > 1.0e-3);
     }
 }
 
@@ -422,7 +439,8 @@ UT_TEST(mechanism_conserves_charge)
             net += plasmachem::get_charge(sp) * wdot[sp];
             total += std::abs(plasmachem::get_charge(sp) * wdot[sp]);
         }
-        UT_CHECK(total > 0.0);
+        // total is zero for a mechanism with no active reaction (Advect),
+        // then net has to be exactly zero
         UT_CHECK(std::abs(net) <= 1.0e-10 * total);
     }
 }
