@@ -534,6 +534,16 @@ void Vidyut::ReadParameters()
 #endif
         pp.query("using_ib", using_ib);
         pp.query("ib_identity_rows", ib_identity_rows);
+        if (ib_identity_rows < 0)
+        {
+            ib_identity_rows = (max_level > 0) ? 1 : 0;
+        }
+        if (using_ib)
+        {
+            amrex::Print()
+                << "IB solid cells: "
+                << (ib_identity_rows ? "own row" : "overset mask") << "\n";
+        }
 
         if (using_ib)
         {

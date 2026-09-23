@@ -188,14 +188,14 @@ void Vidyut::solve_photoionization(
         robin_b[ilev].define(grids[ilev], dmap[ilev], 1, num_grow);
         robin_f[ilev].define(grids[ilev], dmap[ilev], 1, num_grow);
 
-        if (using_ib)
+        if (using_ib && !ib_identity_rows)
         {
             solvemask[ilev].define(grids[ilev], dmap[ilev], 1, 0);
             solvemask[ilev].setVal(1);
         }
     }
 
-    if (using_ib)
+    if (using_ib && !ib_identity_rows)
     {
         set_solver_mask(solvemask, Sborder);
         linsolve_ptr.reset(new MLABecLaplacian(
