@@ -19,7 +19,7 @@ struct ProbParm
     amrex::Real a_outer_dir = 1.0;
     amrex::Real b_outer_neumann = 0.0;
     amrex::Real n0 = 1e6;
-    amrex::Real solnfrac = 0.5;
+    amrex::Real solnfrac = 1.0;
     bool enable_EB = true;
 };
 #endif

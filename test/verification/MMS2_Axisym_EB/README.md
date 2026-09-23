@@ -1,63 +1,81 @@
-# Method-of-Manufactured solutions (MMS2) Axisymmetric + EB
+# MMS2 on an annulus with embedded-boundary geometry
 
-This case solves all equations in the plasma model with MMS source terms in axi-symmetric form:
+Fully coupled three-species plasma model (electrons, HEp ions, electron energy
+and the potential) on the annulus $0.5 \le r \le 1.5$ inside a
+$[-3,3]^2$ domain, with the walls carried as an embedded boundary. The
+manufactured solution is
 
-$$\frac{dn_e}{dt}+\frac{d (\mu n_e E)}{dx}+\frac{d (\mu n_e E)}{dy}=\frac{d}{dx}\left(D_e\frac{dn_e}{dx}\right) + \frac{d}{dy}\left(D_e\frac{dn_e}{dy}\right) + k_i n_e +S(n_e) $$
-$$\frac{dn_i}{dt}+\frac{d (\mu_i n_i E)}{dx}+\frac{d (\mu_i n_i E)}{dy}=\frac{d}{dx}\left(D_i\frac{dn_i}{dx}\right) + \frac{d}{dy}\left(D_i\frac{dn_i}{dy}\right) + k_i n_e +S(n_i) $$
+$$\phi = \frac{r^4}{32}, \qquad
+  n_e = E_e = \frac{r^2}{\alpha} + n_0, \qquad
+  n_i = \frac{r^2}{2\alpha} + n_0,$$
 
-$$\frac{d^2\phi}{dx^2}+\frac{d^2\phi}{dy^2}=\frac{e(n_e-n_i)}{\epsilon_0} \quad E=-\nabla\phi$$
-$$\frac{dE_e}{dt}+\frac{d (\mu_e E_e E)}{dx}+\frac{d (\mu_e E_e E)}{dy}-\frac{d}{dx}\left(D_e\frac{dE_e}{dx}\right) - \frac{d}{dy}\left(D_e\frac{dE_e}{dy}\right)=-e \Gamma_e E - k_i n_e E_i - \frac{3}{2} n_e k_B T_e \nu \frac{2 m_e}{m_h} + S(E_e)$$
+with $\alpha = 1.809512801\times10^{-8}$ and $n_0 = 10^6$.
 
-These values are assumed for various reaction and transport parameters where e and $$m_p$$ are
-electronic charge and proton mass, respectively:
+This is the case that produced the MMS2 results of the paper. The geometric
+reconstruction is selected at run time; the defaults here are
+`prob.eb_geom_method=4` (scaled quadric fit with the offset and a Newton
+closest-point projection) and `prob.eb_quadric_offset=1`. Every log starts with
+a line
 
-$$k_i=5.0~\exp\left(-\frac{2.0}{k_BTe}\right)$$
-$$\mu_e=-1.0 \quad D_e=1.0 \quad \mu_i=0.5 \quad D_i=0.5$$
-$$E_i=\frac{4}{e} \quad \nu=10000.0 \quad m_h=4 m_p$$
+```
+IB reconstruction: prob.eb_geom_method = 4 (scaled quadric + Newton), prob.eb_quadric_offset = 1
+```
 
-We assume the exact solution to this system is:
+so a plotfile can always be traced back to the method that produced it. Do not
+switch methods by editing `Prob.H`; pass `prob.eb_geom_method=1..5` instead
+(1 PCA plane + quadric, 2 PCA tangent plane, 3 analytical annulus,
+4 scaled quadric + Newton, 5 nearest cut cell / IB--NG).
 
-$$n_e=\frac{x^2+y^2}{\alpha} + n_0$$
-$$n_i=\frac{x^2+y^2}{2.0 \alpha}+n_0$$
-$$\phi=\frac{1}{32}\left(x^2+y^2\right)^2$$
-$$E_\epsilon=\frac{x^2+y^2}{\alpha}+n_0$$
-$$alpha=\frac{e}{\epsilon_0}$$
-$$n_0=10^6$$
+### Build
 
-We then compute the sources ($$S(n_e),S(n_i), S(E_e)$$)
-for each of the equations by substituting the exact solution.
+```
+export AMREX_HOME=/path/to/amrex        # if not using the submodule
+make -j COMP=llvm USE_MPI=TRUE
+```
 
-All boundary conditions in this case are Dirichlet type with the
-boundary values directly computed from the exact solution.
+`USE_EB=TRUE` is already set in the `GNUmakefile`.
 
-### Build instructions
+### Run and check
 
-make sure $AMREX_HOME is set to your clone of amrex
-`$ export AMREX_HOME=/path/to/amrex`
+```
+./run.sh
+python3 all_errors.py -f .
+```
 
-If you are copying this case folder elsewhere then
-make sure $VIDYUT_DIR is set to your clone of vidyut
-`$ export VIDYUT_DIR=/path/to/vidyut`
+`all_errors.py` masks to the fluid with `cellmask > 1 - 1e-10` and normalizes
+the $L_2$ norm by the whole domain. A looser mask threshold lets in the cut
+cells that the solver masks out and gives a meaningless error.
 
-To build a serial executable with gcc do
-`$ make -j COMP=gnu`
+### Expected results
 
-To build a serial executable with clang++ do
-`$ make -j COMP=llvm`
+$L_2$ errors and convergence rates, method 4 with the offset:
 
-To build a parallel executable with gcc do
-`$ make -j COMP=gnu USE_MPI=TRUE`
+| $N_x$ | $\phi$ | $p$ | $n_e$ | $p$ | $n_i$ | $p$ | $E_e$ | $p$ |
+|---|---|---|---|---|---|---|---|---|
+| 32  | 8.65e-04 | --   | 1.37e+05 | --   | 8.06e+04 | --   | 1.37e+05 | --   |
+| 64  | 3.06e-04 | 1.50 | 2.84e+04 | 2.27 | 2.87e+04 | 1.49 | 2.84e+04 | 2.27 |
+| 128 | 8.42e-05 | 1.86 | 5.86e+03 | 2.28 | 9.45e+03 | 1.60 | 5.86e+03 | 2.28 |
+| 256 | 2.22e-05 | 1.92 | 1.61e+03 | 1.87 | 2.79e+03 | 1.76 | 1.61e+03 | 1.87 |
+| 512 | 5.99e-06 | 1.89 | 4.65e+02 | 1.79 | 7.69e+02 | 1.86 | 4.65e+02 | 1.79 |
 
-To build a parallel executable with gcc, mpi and cuda
-`$ make -j COMP=gnu USE_CUDA=TRUE USE_MPI=TRUE`
+### Adaptive mesh refinement
 
+The mask of this case is binary, `cellmask = (vfrac > 1 - 1e-8) ? 1 : 0`, so it
+has no partially filled cells and `vidyut.refine_cutcells` finds nothing to tag.
+Refine on the gradient of the mask instead, which marks the cells next to the
+wall:
 
-### Run instructions
+```
+mpirun -np 4 ./*.ex inputs2d amr.max_level=1 amr.n_error_buf=8 amr.blocking_factor=8 \
+    vidyut.tagged_vars=cellmask vidyut.cellmask_refine=1e20 vidyut.cellmask_refinegrad=0.1 \
+    vidyut.use_hypre=1 vidyut.linsolve_max_coarsening_level=0
+```
 
-Use the `run.sh` script to run an array of cases with Dirichlet and Neumann boundary conditions.
-You will need the `fextract` executable from amrex, which can be built from within
-https://github.com/AMReX-Codes/amrex/tree/development/Tools/Plotfile
-
-Alternatively, you can just do `mpirun -n 1 ./*.ex inputs2d`
-
-
+**This does not run to completion yet.** The levels are built and the potential
+solve converges on the hierarchy (21 hypre iterations, relative residual
+$6\times10^{-13}$), but the implicit species solve does not: it stops at a
+relative residual of $6\times10^{-5}$ after 1000 iterations and aborts in
+`ScalarSolve.cpp`. The masked cells cannot be coarsened and the limit is taken
+from the coarsest level, which the potential solve survives with `hypre` as the
+bottom solver and the species solve does not. The uniform-grid results above are
+unaffected.

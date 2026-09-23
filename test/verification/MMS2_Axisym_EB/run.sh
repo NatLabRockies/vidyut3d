@@ -1,32 +1,28 @@
 #!/usr/bin/env bash
+# MMS2 on an annulus with EB geometry.
+#
+# Reproduces the MMS2 convergence table of the paper. The reconstruction is
+# selected at run time and this case defaults to prob.eb_geom_method=4 (scaled
+# quadric + Newton) with prob.eb_quadric_offset=1; every log begins with an
+# "IB reconstruction:" line saying which one was used. Do not switch methods by
+# editing Prob.H.
+#
+#   ./run.sh                    # grids 32 64 128 256
+#   python3 all_errors.py -f .  # table and convergence plots
+#   python3 mms2_profiles.py    # radial profiles
 
 export FI_PROVIDER=tcp mpirun
 
-INNER_DIRICHLET=0
-OUTER_DIRICHLET=1
-
-for DIM in 16 32 64 
+for DIM in 32 64 128 256
 do
-    mkdir -p "${DIM}"
-    
-    cd "${DIM}"
-    
-    rm -rf plt* chk*
-    mpirun -np 1 ../vidyut2d.llvm.MPI.ex ../inputs2d  amr.n_cell="${DIM}" "${DIM}" 1 prob.outer_dirichlet=${OUTER_DIRICHLET} prob.inner_dirichlet=${INNER_DIRICHLET} 
-    ls -1v plt*/Header | tee movie.visit
-    
-    cd ..
-done
+    NP=1
+    if [ "${DIM}" -ge 128 ]; then NP=4; fi
 
-for DIM in 128 256 512
-do
     mkdir -p "${DIM}"
-    
     cd "${DIM}"
-    
+
     rm -rf plt* chk*
-    mpirun -np 8 ../vidyut2d.llvm.MPI.ex ../inputs2d  amr.n_cell="${DIM}" "${DIM}" 1 prob.outer_dirichlet=${OUTER_DIRICHLET} prob.inner_dirichlet=${INNER_DIRICHLET} 
-    ls -1v plt*/Header | tee movie.visit
-    
+    mpirun -np ${NP} ../*.ex ../inputs2d amr.n_cell="${DIM}" "${DIM}" 1 > log.log 2>&1
+
     cd ..
 done

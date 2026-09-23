@@ -1,4 +1,4 @@
-max_step  = 200
+max_step  = 720
 stop_time = 1000
 
 # PROBLEM SIZE & GEOMETRY
@@ -6,8 +6,16 @@ geometry.is_periodic =  0 0
 geometry.coord_sys   =  0       # 0 => cart, 1 => RZ (axisymmetric)
 geometry.prob_lo     =  -3     -3
 geometry.prob_hi     =   3      3
-amr.n_cell           = 64 64
-amr.blocking_factor = 2 
+amr.n_cell           = 16 16 
+amr.blocking_factor = 2
+
+# EB
+eb2.geom_type = annulus
+eb2.inner_r = 0.5
+eb2.outer_r = 1.5
+eb2.center  = 0.0 0.0 0.0
+eb2.height  = 20.0
+eb2.axis    = 2          # axis of cylinder
 
 # VERBOSITY
 amr.v              = 1       # verbosity in Amr
@@ -24,6 +32,10 @@ amr.regrid_int      = 1       # how often to regrid
 
 # TIME STEP CONTROL
 vidyut.dt             = 0.01
+vidyut.hyp_order=5
+vidyut.num_timestep_correctors=1
+
+
 
 
 vidyut.user_defined_potential = 1
@@ -31,7 +43,7 @@ vidyut.user_defined_species = 1
 vidyut.user_defined_vel = 1
 vidyut.using_ib=1
 
-vidyut.bound_specden=1
+vidyut.bound_specden=0
 vidyut.min_species_density=1e-11
 vidyut.min_electron_density=1e-11
 vidyut.min_electron_temp=1e-11
@@ -52,8 +64,8 @@ prob.inner_voltage=10.0
 prob.outer_voltage=20.0
 prob.a_inner_dir = 1.0
 prob.b_inner_neumann = 0.0
-prob.a_outer_dir = 0.5
-prob.b_outer_neumann = 0.5
+prob.a_outer_dir = 1.0
+prob.b_outer_neumann = 0.0
 
 vidyut.pot_bc_lo = 4 4
 vidyut.pot_bc_hi = 4 4
@@ -68,7 +80,22 @@ vidyut.ion_bc_lo = 1 1
 vidyut.ion_bc_hi = 1 1
 
 vidyut.neutral_bc_lo = 2 2
-vidyut.neutral_bc_hi = 2 2 
+vidyut.neutral_bc_hi = 2 2
+
+#vidyut.pot_bc_lo = 0 0
+#vidyut.pot_bc_hi = 0 0
+
+#vidyut.eden_bc_lo = 0 0
+#vidyut.eden_bc_hi = 0 0
+
+#vidyut.eenrg_bc_lo = 0 0
+#vidyut.eenrg_bc_hi = 0 0
+
+#vidyut.ion_bc_lo = 0 0
+#vidyut.ion_bc_hi = 0 0
+
+#vidyut.neutral_bc_lo = 0 0
+#vidyut.neutral_bc_hi = 0 0
 
 # PLOTFILES
 amr.plot_file  = plt    # root name of plot file
@@ -77,3 +104,9 @@ amr.plot_int   = 1000     # number of timesteps between plot files
 # CHECKPOINT
 amr.chk_file = chk      # root name of checkpoint file
 amr.chk_int  = 1000      # number of timesteps between checkpoint files
+
+vidyut.linsolve_reltol = 1.0e-12
+vidyut.linsolve_abstol = 1.0e-14
+vidyut.linsolve_maxiter = 1000
+
+
