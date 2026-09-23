@@ -12,6 +12,57 @@
 #include <Vidyut.H>
 #include <Chemistry.H>
 
+// Split the state into contiguous runs of solution and geometry components.
+// The geometry components are the IB cell mask and, when EB is on, the
+// boundary centroids and normals it carries along with it.
+Vector<Vidyut::CompRange> Vidyut::comp_ranges() const
+{
+    auto is_geometry = [](int c) {
+#ifdef AMREX_USE_EB
+        return (c == CMASK_ID) || (c >= CPX_ID && c <= NZ_ID);
+#else
+        return (c == CMASK_ID);
+#endif
+    };
+
+    Vector<CompRange> ranges;
+    int start = 0;
+    for (int c = 1; c <= NVAR; c++)
+    {
+        if (c == NVAR || is_geometry(c) != is_geometry(start))
+        {
+            ranges.push_back({start, c - start, is_geometry(start)});
+            start = c;
+        }
+    }
+    return ranges;
+}
+
+// Recompute a level's geometry components from the geometry itself. A level
+// that has just been built or rebuilt by regridding has those components
+// filled by interpolation from the coarse level, which is meaningless for a
+// volume fraction and worse than meaningless for a normal vector.
+void Vidyut::rebuild_level_geometry(
+    int lev, const BoxArray& ba, const DistributionMapping& dm)
+{
+#ifdef AMREX_USE_EB
+    // EB rebuilds the index space from the level's own Geometry, so the
+    // boundary is resolved at this level's dx rather than inherited from the
+    // coarse level. That sharpening is the whole point of refining here.
+    if (h_prob_parm->enable_EB)
+    {
+        init_level_with_eb(ba, dm, geom[lev], phi_new[lev], d_prob_parm);
+    }
+#else
+    // Without EB there is no per-level geometry to rebuild from: the mask is
+    // written by initdomaindata, which would clobber the solution. The mask
+    // was injected rather than interpolated (see comp_ranges), so it stays a
+    // valid 0/1 field, but it is the coarse level's staircase, not a sharper
+    // boundary. Use an EB case if you want refinement to improve the geometry.
+    amrex::ignore_unused(lev, ba, dm);
+#endif
+}
+
 // Make a new level using provided BoxArray and DistributionMapping and
 // fill with interpolated coarse level data.
 // overrides the pure virtual function in AmrCore
@@ -29,6 +80,8 @@ void Vidyut::MakeNewLevelFromCoarse(
     t_old[lev] = time - 1.e200;
 
     FillCoarsePatch(lev, time, phi_new[lev], 0, ncomp);
+
+    rebuild_level_geometry(lev, ba, dm);
 }
 
 // Remake an existing level using provided BoxArray and DistributionMapping and
@@ -51,6 +104,8 @@ void Vidyut::RemakeLevel(
 
     t_new[lev] = time;
     t_old[lev] = time - 1.e200;
+
+    rebuild_level_geometry(lev, ba, dm);
 }
 
 // Delete level data
@@ -95,14 +150,10 @@ void Vidyut::MakeNewLevelFromScratch(
             initdomaindata(tbx, fab, geomData, localprobparm);
         });
     }
-#ifdef AMREX_USE_EB
-    // Conditionally build EB depending on user request in d_prob_parm
-    if (localprobparm->enable_EB)
-    {
-        // User requested EB: build EB and initialize masks from EB vfrac
-        init_level_with_eb(ba, dm, geom[lev], state, localprobparm);
-    }
-#endif
+    // Conditionally build EB depending on user request in the ProbParm.
+    // Same call as after a regrid, so a level has the same geometry however
+    // it came into existence.
+    rebuild_level_geometry(lev, ba, dm);
 
     // copy new -> old
     amrex::MultiFab::Copy(phi_old[lev], phi_new[lev], 0, 0, ncomp, 0);
@@ -114,9 +165,7 @@ void Vidyut::AverageDown()
     BL_PROFILE("vidyut::AverageDown()");
     for (int lev = finest_level - 1; lev >= 0; --lev)
     {
-        amrex::average_down(
-            phi_new[lev + 1], phi_new[lev], geom[lev + 1], geom[lev], 0,
-            phi_new[lev].nComp(), refRatio(lev));
+        AverageDownTo(lev);
     }
 }
 
@@ -124,9 +173,18 @@ void Vidyut::AverageDown()
 // multiple levels
 void Vidyut::AverageDownTo(int crse_lev)
 {
-    amrex::average_down(
-        phi_new[crse_lev + 1], phi_new[crse_lev], geom[crse_lev + 1],
-        geom[crse_lev], 0, phi_new[crse_lev].nComp(), refRatio(crse_lev));
+    // Geometry components are skipped: the coarse level already holds the
+    // mask, centroids and normals of its own dx, and averaging the fine
+    // level's into them turns unit normals into short ones and drags cells
+    // that are wholly fluid at the coarse dx below the mask cutoff.
+    for (const auto& r : comp_ranges())
+    {
+        if (r.is_geometry) continue;
+
+        amrex::average_down(
+            phi_new[crse_lev + 1], phi_new[crse_lev], geom[crse_lev + 1],
+            geom[crse_lev], r.scomp, r.ncomp, refRatio(crse_lev));
+    }
 }
 
 // compute a new multifab by coping in phi from valid region and filling ghost
@@ -157,18 +215,34 @@ void Vidyut::FillPatch(int lev, Real time, MultiFab& mf, int icomp, int ncomp)
         GetData(lev - 1, time, cmf, ctime);
         GetData(lev, time, fmf, ftime);
 
-        Interpolater* mapper = &cell_cons_interp;
-
         GpuBndryFuncFab<AmrCoreFill> gpu_bndry_func(amrcore_fill_func);
         PhysBCFunct<GpuBndryFuncFab<AmrCoreFill>> cphysbc(
             geom[lev - 1], bcspec, gpu_bndry_func);
         PhysBCFunct<GpuBndryFuncFab<AmrCoreFill>> fphysbc(
             geom[lev], bcspec, gpu_bndry_func);
 
-        amrex::FillPatchTwoLevels(
-            mf, time, cmf, ctime, fmf, ftime, 0, icomp, ncomp, geom[lev - 1],
-            geom[lev], cphysbc, 0, fphysbc, 0, refRatio(lev - 1), mapper,
-            bcspec, 0);
+        // Solution components are interpolated; geometry components are
+        // injected, so a fine ghost cell inherits its covering coarse cell's
+        // mask exactly instead of a conservative blend of it and its
+        // neighbours, which would put fractional values into what the IB
+        // code reads as a 0/1 flag.
+        for (const auto& r : comp_ranges())
+        {
+            if (r.scomp + r.ncomp <= icomp || r.scomp >= icomp + ncomp)
+                continue;
+
+            const int scomp = amrex::max(r.scomp, icomp);
+            const int ecomp = amrex::min(r.scomp + r.ncomp, icomp + ncomp);
+
+            Interpolater* mapper = r.is_geometry
+                                       ? (Interpolater*)&pc_interp
+                                       : (Interpolater*)&cell_cons_interp;
+
+            amrex::FillPatchTwoLevels(
+                mf, time, cmf, ctime, fmf, ftime, scomp, scomp,
+                ecomp - scomp, geom[lev - 1], geom[lev], cphysbc, scomp,
+                fphysbc, scomp, refRatio(lev - 1), mapper, bcspec, scomp);
+        }
     }
 }
 
@@ -184,8 +258,6 @@ void Vidyut::FillCoarsePatch(
     Vector<Real> ctime;
     GetData(lev - 1, time, cmf, ctime);
 
-    Interpolater* mapper = &cell_cons_interp;
-
     if (cmf.size() != 1)
     {
         amrex::Abort("FillCoarsePatch: how did this happen?");
@@ -197,7 +269,24 @@ void Vidyut::FillCoarsePatch(
     PhysBCFunct<GpuBndryFuncFab<AmrCoreFill>> fphysbc(
         geom[lev], bcspec, gpu_bndry_func);
 
-    amrex::InterpFromCoarseLevel(
-        mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev], cphysbc,
-        0, fphysbc, 0, refRatio(lev - 1), mapper, bcspec, 0);
+    // Geometry components are injected rather than interpolated. For an EB
+    // case they are overwritten straight after by rebuild_level_geometry();
+    // filling them here anyway keeps the state fully defined for the cases
+    // that have no geometry to rebuild from.
+    for (const auto& r : comp_ranges())
+    {
+        if (r.scomp + r.ncomp <= icomp || r.scomp >= icomp + ncomp) continue;
+
+        const int scomp = amrex::max(r.scomp, icomp);
+        const int ecomp = amrex::min(r.scomp + r.ncomp, icomp + ncomp);
+
+        Interpolater* mapper = r.is_geometry
+                                   ? (Interpolater*)&pc_interp
+                                   : (Interpolater*)&cell_cons_interp;
+
+        amrex::InterpFromCoarseLevel(
+            mf, time, *cmf[0], scomp, scomp, ecomp - scomp, geom[lev - 1],
+            geom[lev], cphysbc, scomp, fphysbc, scomp, refRatio(lev - 1),
+            mapper, bcspec, scomp);
+    }
 }

@@ -200,6 +200,13 @@ public:
     amrex::Gpu::ManagedVector<Real> refine_phigrad;
     amrex::Gpu::ManagedVector<int> refine_phi_comps;
 
+    // Refine on the immersed-boundary cut cells themselves. The geometry does
+    // not move, so this gives a refinement pattern that is fixed for the whole
+    // run (static refinement). Widen the refined band with amr.n_error_buf.
+    int refine_cutcells = 0;
+    amrex::Real cutcell_vfrac_lo = 0.0;
+    amrex::Real cutcell_vfrac_hi = 1.0;
+
     amrex::Vector<int> istep;     // which step?
     amrex::Vector<int> nsubsteps; // how many substeps on each level?
 
@@ -347,7 +354,7 @@ public:
         Vector<Array<MultiFab, AMREX_SPACEDIM>>& efield_fc,
         Real time);
 
-#ifdef ENABLE_IB_FIELD_INTERPOLATION
+#if defined(ENABLE_IB_FIELD_INTERPOLATION) && defined(AMREX_USE_EB)
     void interpolate_fields_ib(
         Vector<MultiFab>& Sborder, int startcomp, int numcomp);
 #endif
@@ -406,6 +413,28 @@ private:
 
     // read in some parameters from inputs file
     void ReadParameters();
+
+    // A contiguous run of state components that are all of the same kind.
+    // Geometry components (the IB cell mask, and with EB the boundary
+    // centroids and normals) describe where the boundary is, not what the
+    // solution is, so they are rebuilt per level from the geometry: they are
+    // never averaged down, and they are injected rather than interpolated
+    // when filling a finer level.
+    struct CompRange
+    {
+        int scomp;
+        int ncomp;
+        bool is_geometry;
+    };
+
+    // Split [0, NVAR) into runs of solution and geometry components.
+    amrex::Vector<CompRange> comp_ranges() const;
+
+    // Recompute the geometry components of a level from the geometry itself.
+    // Called after a level is created or remade by regridding, where the
+    // state has just been filled by interpolation from the coarse level.
+    void rebuild_level_geometry(
+        int lev, const amrex::BoxArray& ba, const amrex::DistributionMapping& dm);
 
     // set covered coarse cells to be the average of overlying fine cells
     void AverageDown();

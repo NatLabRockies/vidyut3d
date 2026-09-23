@@ -269,6 +269,20 @@ void Vidyut::ErrorEst(int lev, TagBoxArray& tags, Real time, int ngrow)
     {
         first = false;
         ParmParse pp("vidyut");
+
+        // Geometry-locked refinement of the IB cut cells. Independent of
+        // tagged_vars, so it can be used on its own for static refinement.
+        pp.query("refine_cutcells", refine_cutcells);
+        pp.query("cutcell_vfrac_lo", cutcell_vfrac_lo);
+        pp.query("cutcell_vfrac_hi", cutcell_vfrac_hi);
+
+        if (refine_cutcells && !using_ib)
+        {
+            amrex::Abort(
+                "vidyut.refine_cutcells needs vidyut.using_ib=1: without an "
+                "immersed boundary there are no cut cells to tag\n");
+        }
+
         if (pp.contains("tagged_vars"))
         {
             int nvars = pp.countval("tagged_vars");
@@ -311,7 +325,7 @@ void Vidyut::ErrorEst(int lev, TagBoxArray& tags, Real time, int ngrow)
         }
     }
 
-    if (refine_phi.size() == 0) return;
+    if (refine_phi.size() == 0 && !refine_cutcells) return;
 
     //    const int clearval = TagBox::CLEAR;
     const int tagval = TagBox::SET;
@@ -351,6 +365,22 @@ void Vidyut::ErrorEst(int lev, TagBoxArray& tags, Real time, int ngrow)
                     i, j, k, tagfab, statefab, refine_phigrad_dat,
                     refine_phi_comps_dat, ntagged_comps, tagval);
             });
+
+        if (refine_cutcells)
+        {
+            amrex::Real vfrac_lo = cutcell_vfrac_lo;
+            amrex::Real vfrac_hi = cutcell_vfrac_hi;
+
+            amrex::ParallelFor(
+                Sborder,
+                [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+                    auto statefab = sb_arrays[nbx];
+                    auto tagfab = tags_arrays[nbx];
+                    cutcell_based_refinement(
+                        i, j, k, tagfab, statefab, CMASK_ID, vfrac_lo,
+                        vfrac_hi, tagval);
+                });
+        }
     }
 }
 
@@ -850,7 +880,7 @@ void Vidyut::correct_efields_ib(
     }
 }
 
-#ifdef ENABLE_IB_FIELD_INTERPOLATION
+#if defined(ENABLE_IB_FIELD_INTERPOLATION) && defined(AMREX_USE_EB)
 void Vidyut::interpolate_fields_ib(
     Vector<MultiFab>& Sborder, int startcomp, int numcomp)
 {

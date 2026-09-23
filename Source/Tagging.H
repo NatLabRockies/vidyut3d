@@ -27,6 +27,31 @@ void state_based_refinement(
     }
 }
 
+// Tag the immersed-boundary cut cells, i.e. the cells the boundary passes
+// through, identified by a volume fraction strictly between vfrac_lo and
+// vfrac_hi. The geometry does not move, so the tagged set is the same at
+// every regrid and the refinement is static. Widen the refined band into the
+// fluid with amr.n_error_buf.
+AMREX_GPU_HOST_DEVICE
+AMREX_FORCE_INLINE
+void cutcell_based_refinement(
+    int i,
+    int j,
+    int k,
+    amrex::Array4<char> const& tag,
+    amrex::Array4<amrex::Real const> const& state,
+    int cmask_comp,
+    amrex::Real vfrac_lo,
+    amrex::Real vfrac_hi,
+    char tagval)
+{
+    const amrex::Real vfrac = state(i, j, k, cmask_comp);
+    if (vfrac > vfrac_lo && vfrac < vfrac_hi)
+    {
+        tag(i, j, k) = tagval;
+    }
+}
+
 AMREX_GPU_HOST_DEVICE
 AMREX_FORCE_INLINE
 void stategrad_based_refinement(
