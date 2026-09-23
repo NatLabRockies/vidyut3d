@@ -109,7 +109,7 @@ jobs:
       working-directory: ./test/verification/Laplace_2D_RobinBC_Test_EB/
       run: |
         ccache -z
-        make -j 2 USE_CCACHE=TRUE COMP=gnu
+        make -j 2 USE_CCACHE=TRUE COMP=gnu USE_EB=TRUE
         ccache -s
     - name: Build fextrema
       working-directory: ./Submodules/amrex/Tools/Plotfile
