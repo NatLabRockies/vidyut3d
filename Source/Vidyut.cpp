@@ -276,6 +276,16 @@ void Vidyut::ErrorEst(int lev, TagBoxArray& tags, Real time, int ngrow)
         pp.query("cutcell_vfrac_lo", cutcell_vfrac_lo);
         pp.query("cutcell_vfrac_hi", cutcell_vfrac_hi);
 
+        // Static refinement of a box given in physical coordinates.
+        if (pp.contains("refine_box_lo") || pp.contains("refine_box_hi"))
+        {
+            refine_box_lo.resize(AMREX_SPACEDIM);
+            refine_box_hi.resize(AMREX_SPACEDIM);
+            pp.getarr("refine_box_lo", refine_box_lo, 0, AMREX_SPACEDIM);
+            pp.getarr("refine_box_hi", refine_box_hi, 0, AMREX_SPACEDIM);
+            refine_box = 1;
+        }
+
         if (refine_cutcells && !using_ib)
         {
             amrex::Abort(
@@ -325,7 +335,7 @@ void Vidyut::ErrorEst(int lev, TagBoxArray& tags, Real time, int ngrow)
         }
     }
 
-    if (refine_phi.size() == 0 && !refine_cutcells) return;
+    if (refine_phi.size() == 0 && !refine_cutcells && !refine_box) return;
 
     //    const int clearval = TagBox::CLEAR;
     const int tagval = TagBox::SET;
@@ -365,6 +375,23 @@ void Vidyut::ErrorEst(int lev, TagBoxArray& tags, Real time, int ngrow)
                     i, j, k, tagfab, statefab, refine_phigrad_dat,
                     refine_phi_comps_dat, ntagged_comps, tagval);
             });
+
+        if (refine_box)
+        {
+            const auto dxa = geom[lev].CellSizeArray();
+            const auto plo = geom[lev].ProbLoArray();
+            GpuArray<Real, AMREX_SPACEDIM> blo = {AMREX_D_DECL(
+                refine_box_lo[0], refine_box_lo[1], refine_box_lo[2])};
+            GpuArray<Real, AMREX_SPACEDIM> bhi = {AMREX_D_DECL(
+                refine_box_hi[0], refine_box_hi[1], refine_box_hi[2])};
+            amrex::ParallelFor(
+                Sborder,
+                [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+                    auto tagfab = tags_arrays[nbx];
+                    box_based_refinement(
+                        i, j, k, tagfab, plo, dxa, blo, bhi, tagval);
+                });
+        }
 
         if (refine_cutcells)
         {
