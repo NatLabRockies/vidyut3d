@@ -71,7 +71,11 @@ def level_arrays(ds, lev, fields):
     return present, data
 
 
-def analyse(fdir, plotfile=None, cf_width=2):
+def analyse(fdir, plotfile=None, cf_width=2, norm="fluid"):
+    """norm='fluid' divides the L2 by the fluid volume; norm='domain' divides by
+    the whole domain volume, solid included. The paper's single-level script uses
+    np.mean over every cell in the domain, so 'domain' is what reproduces its
+    numbers and is what AMR rows must use to sit on the same axes."""
     if plotfile is None:
         cands = sorted(glob.glob(os.path.join(fdir, "plt?????")))
         if not cands:
@@ -144,16 +148,22 @@ def analyse(fdir, plotfile=None, cf_width=2):
             acc[key]["e2_E"] = acc[key].get("e2_E", 0.0) + float((ee ** 2).sum()) * cellvol
             acc[key]["linf_E"] = max(acc[key].get("linf_E", 0.0), float(ee.max()))
 
+    # the paper normalises by the whole domain, not by the fluid it contains
+    dom = ds.domain_right_edge.to_value()[:2] - ds.domain_left_edge.to_value()[:2]
+    domvol = float(dom[0] * dom[1])
+    denom = domvol if norm == "domain" else acc["all"]["vol"]
+
     out = {
         "dir": fdir,
+        "norm": norm,
         "plotfile": os.path.basename(plotfile),
         "base": int(ds.domain_dimensions[0]),
         "maxlev": maxlev,
         "eff": int(ds.domain_dimensions[0] * 2 ** maxlev),
         "ncell": ncell_total,
-        "phi_L2": np.sqrt(acc["all"]["e2"] / acc["all"]["vol"]),
+        "phi_L2": np.sqrt(acc["all"]["e2"] / denom),
         "phi_Linf": acc["all"]["linf"],
-        "E_L2": np.sqrt(acc["all"]["e2_E"] / acc["all"]["vol"]),
+        "E_L2": np.sqrt(acc["all"]["e2_E"] / denom),
         "E_Linf": acc["all"]["linf_E"],
     }
     for k in ("ib", "cf", "int"):
@@ -175,10 +185,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("-f", "--fdirs", required=True, nargs="+")
     ap.add_argument("--cf-width", type=int, default=2)
+    ap.add_argument("--norm", choices=["fluid", "domain"], default="fluid")
     ap.add_argument("--plot", default=None)
     args = ap.parse_args()
 
-    rows = [analyse(d, cf_width=args.cf_width) for d in args.fdirs]
+    rows = [analyse(d, cf_width=args.cf_width, norm=args.norm)
+            for d in args.fdirs]
     rows.sort(key=lambda r: (r["maxlev"], r["eff"]))
 
     hdr = (f"{'case':<12} {'base':>5} {'lev':>4} {'eff':>5} {'cells':>9} "
