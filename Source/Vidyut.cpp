@@ -805,13 +805,13 @@ void Vidyut::check_ib_cf_clearance() const
 
     for (int lev = 0; lev < finest_level; lev++)
     {
-        // 1 where this level owns the cell, 0 where the finer level covers it
-        iMultiFab fine0 = makeFineMask(
-            grids[lev], dmap[lev], grids[lev + 1], refRatio(lev), 1, 0);
-        iMultiFab fm(grids[lev], dmap[lev], 1, 1);
-        fm.setVal(1, 0, 1, 1);
-        iMultiFab::Copy(fm, fine0, 0, 0, 1, 0);
-        fm.FillBoundary(geom[lev].periodicity());
+        // 1 where this level owns the cell, 0 where the finer level covers
+        // it. The ghost-aware overload fills the ghost region for us and
+        // honours periodicity, so an interface that wraps a periodic boundary
+        // is seen rather than skipped.
+        iMultiFab fm = makeFineMask(
+            grids[lev], dmap[lev], IntVect(1), grids[lev + 1], refRatio(lev),
+            geom[lev].periodicity(), 1, 0);
 
         // cell mask with ghosts; unfilled ghosts read as fluid so a missing
         // neighbour can never manufacture a warning
@@ -827,6 +827,11 @@ void Vidyut::check_ib_cf_clearance() const
             AMREX_D_DECL(dlo_p[0], dlo_p[1], dlo_p[2])};
         GpuArray<int, AMREX_SPACEDIM> dhi = {
             AMREX_D_DECL(dhi_p[0], dhi_p[1], dhi_p[2])};
+        // A periodic ghost is a real neighbour and both masks have it filled,
+        // so only a physical boundary is skipped below.
+        GpuArray<int, AMREX_SPACEDIM> isper = {AMREX_D_DECL(
+            geom[lev].isPeriodic(0), geom[lev].isPeriodic(1),
+            geom[lev].isPeriodic(2))};
         const int rad = RAD;
 
         amrex::Real lev_worst_r = amrex::ReduceMin(
@@ -846,7 +851,8 @@ void Vidyut::check_ib_cf_clearance() const
                         {
                             IntVect nb = iv;
                             nb[d] += sg;
-                            if (nb[d] < dlo[d] || nb[d] > dhi[d]) continue;
+                            if (!isper[d] && (nb[d] < dlo[d] || nb[d] > dhi[d]))
+                                continue;
                             if (fmarr(nb) == 0) oncf = true; // covered by fine
                         }
                     }
