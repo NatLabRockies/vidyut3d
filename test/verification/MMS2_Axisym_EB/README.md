@@ -69,30 +69,36 @@ mpirun -np 4 ./*.ex inputs2d amr.max_level=1 amr.n_error_buf=8 amr.blocking_fact
     vidyut.use_hypre=1 vidyut.linsolve_max_coarsening_level=0
 ```
 
-**This does not run to completion yet.** The hierarchy is built and the
-potential solve converges on it (21 `hypre` iterations, relative residual
-$6\times10^{-13}$), but the implicit species solve stops at a relative residual
-of $6\times10^{-5}$ after 1000 iterations and aborts in `ScalarSolve.cpp`.
+Add `vidyut.ib_identity_rows=1`. Without it the implicit species solve stalls;
+with it the case runs to completion, species solves taking 5 to 6 iterations.
 
-What the failure needs, established by elimination:
+### Why the extra option is needed
 
-| varied | result |
-|---|---|
-| `hypre` on or off, `linsolve_max_coarsening_level` 0 or 10 | fails either way |
-| `linsolve_reltol` 1e-12, 1e-8, 1e-6 | fails either way, residual floors at 6.9e6 |
-| cut-cell or mask-gradient refinement | fails at the same line |
-| same case at `amr.max_level=0` | each species converges in **3** iterations |
-| planar immersed boundary instead of a curved one (`MMS2`, `inputs_x`) | 200 steps, species in 6--7 iterations |
-| potential alone on this geometry (`Laplace_2D_SecondOrder`) | converges, 20--24 iterations |
-| refined region covering the whole domain, no coarse--fine interface | 720 steps, species in 9--10 iterations |
+AMReX applies an overset mask inside the operator but not in the coarse-fine
+machinery: `MLCellLinOp::reflux` and `averageDownAndSync` never consult it. A
+composite solve therefore refluxes a correction into masked coarse cells at the
+coarse-fine interface, and the operator, which returns zero in a masked cell,
+cannot remove it. The residual floors at a fixed value and the solve stops.
 
-So it takes all three of a curved wall, a coarse--fine interface and the species
-equation; any two of them are fine. Widening the refined band does not help
-until the band covers everything, at which point there is no interface left and
-the hierarchy is a uniform fine grid. Forcing the levels to agree about which
-cells are active does not help either, in either direction: switching the
-covered coarse cut cells on destroys the solution, because the wall closure is
-keyed to `cellmask` and not to the solver mask, and switching the fine cells
-under them off leaves the residual floor exactly where it was.
+`vidyut.ib_identity_rows=1` avoids the mask altogether. The solid cells are kept
+as ordinary unknowns and instead decoupled: every face coefficient around them
+is zeroed, their right-hand side is zeroed, and the potential, whose `a`
+coefficient is zero, is given a diagonal so the row is not empty. They solve to
+zero and never reach the fluid, and with no mask the AMR machinery behaves
+normally.
 
-The uniform-grid results above are unaffected.
+The option is off by default because it changes the linear system. It does not
+change the answer: on a uniform grid the two agree to a relative $10^{-10}$,
+which is solver noise. The table above was produced without it, and the paper's
+results are unaffected either way.
+
+| | $\phi$ | $n_e$ | $n_i$ | $E_e$ |
+|---|---|---|---|---|
+| uniform 64, mask | 3.06167e-04 | 2.83838e+04 | 2.87273e+04 | 2.83838e+04 |
+| uniform 64, rows | 3.06167e-04 | 2.83838e+04 | 2.87273e+04 | 2.83838e+04 |
+| 64 + 1 level, rows | 8.41571e-05 | 5.86154e+03 | 9.44585e+03 | 5.86154e+03 |
+| uniform 128 | 8.41571e-05 | 5.86154e+03 | 9.44585e+03 | 5.86154e+03 |
+
+The refined band covers the whole annulus, so the fluid ends up entirely at the
+fine spacing and the hierarchy reproduces the uniform grid of that spacing to
+every digit.

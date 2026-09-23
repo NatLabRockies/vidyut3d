@@ -181,14 +181,14 @@ void Vidyut::solve_potential(
         robin_b[ilev].define(grids[ilev], dmap[ilev], 1, num_grow);
         robin_f[ilev].define(grids[ilev], dmap[ilev], 1, num_grow);
 
-        if (using_ib)
+        if (using_ib && !ib_identity_rows)
         {
             solvemask[ilev].define(grids[ilev], dmap[ilev], 1, 0);
             solvemask[ilev].setVal(1);
         }
     }
 
-    if (using_ib)
+    if (using_ib && !ib_identity_rows)
     {
         set_solver_mask(solvemask, Sborder);
         linsolve_ptr.reset(new MLABecLaplacian(
@@ -218,6 +218,22 @@ void Vidyut::solve_potential(
         acoeff[ilev].setVal(0.0);
         bcoeff[ilev].setVal(-1.0);
 
+        // The potential has a = 0, so a decoupled solid cell would be left
+        // with an empty row. Give it a diagonal; its faces are zeroed in
+        // null_bcoeff_at_ib and its rhs in set_explicit_fluxes_at_ib, so it
+        // solves to zero and never reaches the fluid.
+        if (using_ib && ib_identity_rows)
+        {
+            auto const& sb = Sborder[ilev].const_arrays();
+            auto const& ac = acoeff[ilev].arrays();
+            amrex::ParallelFor(
+                acoeff[ilev],
+                [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+                    if (int(sb[nbx](i, j, k, CMASK_ID)) != 1)
+                        ac[nbx](i, j, k) = 1.0;
+                });
+            amrex::Gpu::streamSynchronize();
+        }
 
         // default to homogenous Neumann
         robin_a[ilev].setVal(0.0);

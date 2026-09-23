@@ -391,6 +391,18 @@ public:
 
     int using_ib = 0;
 
+    // Opt-in. Instead of masking the solid cells out of the linear solve,
+    // give them a decoupled row of their own. AMReX applies an overset mask
+    // inside the operator but not in the AMR coarse-fine sync
+    // (MLCellLinOp::reflux and averageDownAndSync do not consult it), so a
+    // composite solve refluxes a correction into masked coarse cells that
+    // the operator then zeroes, leaving a residual no iteration can remove.
+    // With a row of their own the solid cells are ordinary unknowns that
+    // decouple from the fluid, no mask is needed and the AMR machinery
+    // behaves. Off by default: it changes the linear system, not the fluid
+    // solution.
+    int ib_identity_rows = 0;
+
     int using_LFA = 0;
 
     // Monitor file options

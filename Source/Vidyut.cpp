@@ -533,6 +533,7 @@ void Vidyut::ReadParameters()
         pp.query("use_hypre", use_hypre);
 #endif
         pp.query("using_ib", using_ib);
+        pp.query("ib_identity_rows", ib_identity_rows);
 
         if (using_ib)
         {
@@ -600,6 +601,7 @@ void Vidyut::null_bcoeff_at_ib(
     int numcomps)
 {
     int captured_ncomps = numcomps;
+    int captured_identity_rows = ib_identity_rows;
     for (MFIter mfi(Sborder, TilingIfNotGPU()); mfi.isValid(); ++mfi)
     {
         const Box& bx = mfi.tilebox();
@@ -646,10 +648,13 @@ void Vidyut::null_bcoeff_at_ib(
                         }
                     } else if (covered_interface) // 0*0 case
                     {
-                        // keeping bcoeff non zero in dead cells just in case
+                        // keeping bcoeff non zero in dead cells just in case,
+                        // unless the solid cells are carrying rows of their
+                        // own, where they have to be fully decoupled
                         for (int sp = 0; sp < captured_ncomps; sp++)
                         {
-                            face_bcoeff_arr[idim](face, sp) = 1.0;
+                            face_bcoeff_arr[idim](face, sp) =
+                                captured_identity_rows ? 0.0 : 1.0;
                         }
                     } else
                     {
