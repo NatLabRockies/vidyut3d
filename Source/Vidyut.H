@@ -204,6 +204,10 @@ public:
     // not move, so this gives a refinement pattern that is fixed for the whole
     // run (static refinement). Widen the refined band with amr.n_error_buf.
     int refine_cutcells = 0;
+    // Static refinement of a user-specified box, in physical coordinates.
+    int refine_box = 0;
+    amrex::Vector<amrex::Real> refine_box_lo;
+    amrex::Vector<amrex::Real> refine_box_hi;
     amrex::Real cutcell_vfrac_lo = 0.0;
     amrex::Real cutcell_vfrac_hi = 1.0;
 
@@ -349,6 +353,10 @@ public:
         MultiFab& Sborder,
         int numcomps);
 
+    // Report the smallest gap, in coarse cells, between any coarse-fine
+    // interface and the immersed boundary, and warn when it is too small.
+    void check_ib_cf_clearance() const;
+
     void correct_efields_ib(
         Vector<MultiFab>& Sborder,
         Vector<Array<MultiFab, AMREX_SPACEDIM>>& efield_fc,
@@ -389,6 +397,13 @@ public:
     // Electron species index
     int E_IDX = 0;
 
+    // Keep the electron temperature at its initial value instead of backing it
+    // out of the solved energy density. Needed by manufactured solutions where
+    // EEN is a plain scalar and a backed-out Te would corrupt the
+    // ETEMP-dependent transport coefficients the source term was derived with.
+    // Off by default, so an ordinary run backs Te out as it always has.
+    int freeze_etemp = 0;
+
     int using_ib = 0;
 
     // How the solid cells are kept out of the linear solve. Two ways exist
@@ -405,6 +420,12 @@ public:
     //      therefore used on a single level, where none of that machinery
     //      runs, and rows are used as soon as there is a level to refine.
     int ib_identity_rows = -1;
+
+    // Warn when an AMR coarse-fine interface is closer to an immersed wall
+    // than this many coarse cells. Measured on the MMS cases: a gap of 1 cell
+    // costs about 20x in the max norm and stops the error converging, a gap of
+    // 2 reproduces the uniform grid. See check_ib_cf_clearance.
+    int ib_cf_clearance_warn = 2;
 
     int using_LFA = 0;
 
@@ -449,7 +470,9 @@ private:
     // Called after a level is created or remade by regridding, where the
     // state has just been filled by interpolation from the coarse level.
     void rebuild_level_geometry(
-        int lev, const amrex::BoxArray& ba, const amrex::DistributionMapping& dm);
+        int lev,
+        const amrex::BoxArray& ba,
+        const amrex::DistributionMapping& dm);
 
     // set covered coarse cells to be the average of overlying fine cells
     void AverageDown();

@@ -916,14 +916,12 @@ void Vidyut::implicit_solve_scalar(
     }
     Print() << "\n";
 
-    /*if (electron_energy_flag)
+    if (electron_energy_flag)
     {
- amrex::Print() << "EEN back-out: userdefspec=" << userdefspec
-                       << " (1 => ETEMP frozen at 1.0)\n";
         for (int ilev = 0; ilev <= finest_level; ilev++)
         {
             amrex::Real minetemp = min_electron_temp;
-            int userdefspec_l = userdefspec; // MMS guard (from line 449)
+            int freeze_l = freeze_etemp;
             int eidx_l = eidx;
             auto phi_arrays = phi_new[ilev].arrays();
             auto sborder_arrays = Sborder[ilev].const_arrays();
@@ -933,13 +931,14 @@ void Vidyut::implicit_solve_scalar(
                     auto phi_arr = phi_arrays[nbx];
                     auto sb_arr = sborder_arrays[nbx];
 
-                    if (userdefspec_l == 1)
+                    if (freeze_l == 1)
                     {
-                        // MMS: EEN is a plain scalar (r^2/alpha + n0). Keep Te
-                        // frozen at the manufactured constant (initdomaindata
-                        // sets ETEMP = 1.0) so it does not corrupt the
-                        // ETEMP-dependent transport coefficients that S_manuf
-                        // was derived with. Do NOT overwrite EEN.
+                        // vidyut.freeze_etemp: EEN is a plain manufactured
+                        // scalar, so keep Te at the constant initdomaindata
+                        // set rather than backing it out, which would corrupt
+                        // the ETEMP-dependent transport coefficients the
+                        // manufactured source was derived with. EEN is left
+                        // alone.
                         phi_arr(i, j, k, ETEMP_ID) = 1.0;
                     } else
                     {
@@ -957,7 +956,6 @@ void Vidyut::implicit_solve_scalar(
                 });
         }
     }
-    */
     // clean-up
     specdata.clear();
     acoeff.clear();

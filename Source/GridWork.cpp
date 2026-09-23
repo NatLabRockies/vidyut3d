@@ -239,9 +239,9 @@ void Vidyut::FillPatch(int lev, Real time, MultiFab& mf, int icomp, int ncomp)
                                        : (Interpolater*)&cell_cons_interp;
 
             amrex::FillPatchTwoLevels(
-                mf, time, cmf, ctime, fmf, ftime, scomp, scomp,
-                ecomp - scomp, geom[lev - 1], geom[lev], cphysbc, scomp,
-                fphysbc, scomp, refRatio(lev - 1), mapper, bcspec, scomp);
+                mf, time, cmf, ctime, fmf, ftime, scomp, scomp, ecomp - scomp,
+                geom[lev - 1], geom[lev], cphysbc, scomp, fphysbc, scomp,
+                refRatio(lev - 1), mapper, bcspec, scomp);
         }
     }
 }
@@ -280,9 +280,8 @@ void Vidyut::FillCoarsePatch(
         const int scomp = amrex::max(r.scomp, icomp);
         const int ecomp = amrex::min(r.scomp + r.ncomp, icomp + ncomp);
 
-        Interpolater* mapper = r.is_geometry
-                                   ? (Interpolater*)&pc_interp
-                                   : (Interpolater*)&cell_cons_interp;
+        Interpolater* mapper = r.is_geometry ? (Interpolater*)&pc_interp
+                                             : (Interpolater*)&cell_cons_interp;
 
         amrex::InterpFromCoarseLevel(
             mf, time, *cmf[0], scomp, scomp, ecomp - scomp, geom[lev - 1],

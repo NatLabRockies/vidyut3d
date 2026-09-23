@@ -206,8 +206,8 @@ void init_level_with_eb(
                     cell_center[2] = plo[2] + (k + 0.5) * dx[2];
 #endif
                     Real best_d2 = 1e30;
-                    // In 2D the k index has a single valid value, so the
-                    // neighbour sweep must not step off it.
+                // In 2D the k index has a single valid value, so the
+                // neighbour sweep must not step off it.
 #if (AMREX_SPACEDIM == 3)
                     const int nk_lo = -1, nk_hi = 1;
 #else
