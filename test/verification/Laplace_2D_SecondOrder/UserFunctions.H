@@ -53,8 +53,6 @@ AMREX_GPU_DEVICE AMREX_INLINE void get_photoion_rhs(
     Real Pg)
 {}
 
-
-
 AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     IntVect face,
     int dir,
@@ -87,8 +85,6 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     // Interior (solve) cell: the fluid side (higher volume fraction).
     IntVect intcell = (vf_l >= vf_r) ? lcell : rcell;
 
-  
-
     // Interior cell center (from the fluid interior cell)
     Real xi[AMREX_SPACEDIM];
     xi[0] = prob_lo[0] + (intcell[0] + 0.5_rt) * dx[0];
@@ -97,7 +93,7 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     xi[2] = prob_lo[2] + (intcell[2] + 0.5_rt) * dx[2];
 #endif
 
-     // EB centroid seed from cut cell
+    // EB centroid seed from cut cell
     Real xb_seed[AMREX_SPACEDIM];
     xb_seed[0] = sb_arr(intcell, CPX_ID);
     xb_seed[1] = sb_arr(intcell, CPY_ID);
@@ -133,16 +129,18 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
 
     // Boundary value:
     // for current annulus test, still classify by radius
-    Real rb = std::sqrt(xb[0]*xb[0] + xb[1]*xb[1]);
+    Real rb = std::sqrt(xb[0] * xb[0] + xb[1] * xb[1]);
     Real Rmid = 0.5_rt * (prob_parm.inner_radius + prob_parm.outer_radius);
 
     amrex::Real dphidr =
-                (prob_parm.outer_voltage - prob_parm.inner_voltage) /
-                std::log(prob_parm.outer_radius / prob_parm.inner_radius) / rb;
+        (prob_parm.outer_voltage - prob_parm.inner_voltage) /
+        std::log(prob_parm.outer_radius / prob_parm.inner_radius) / rb;
     amrex::Real dphidn = dphidr * std::fabs(xb[dir]) / rb;
     Real bc_value = (rb > Rmid)
-        ? prob_parm.a_outer_dir * prob_parm.outer_voltage + prob_parm.b_outer_neumann * dphidn
-        : prob_parm.a_inner_dir * prob_parm.inner_voltage - prob_parm.b_inner_neumann * dphidn;
+                        ? prob_parm.a_outer_dir * prob_parm.outer_voltage +
+                              prob_parm.b_outer_neumann * dphidn
+                        : prob_parm.a_inner_dir * prob_parm.inner_voltage -
+                              prob_parm.b_inner_neumann * dphidn;
     // Vector from reconstructed boundary point to interior cell center
     Real ccibvec[AMREX_SPACEDIM];
     for (int d = 0; d < AMREX_SPACEDIM; ++d) ccibvec[d] = xi[d] - xb[d];
@@ -152,8 +150,8 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
 
     if (d2 < 1.0e-24_rt) return;
 
-    auto sgn3 = [] AMREX_GPU_DEVICE (Real v) -> Real {
-        if (v >  1.0e-12_rt) return  1.0_rt;
+    auto sgn3 = [] AMREX_GPU_DEVICE(Real v) -> Real {
+        if (v > 1.0e-12_rt) return 1.0_rt;
         if (v < -1.0e-12_rt) return -1.0_rt;
         return 0.0_rt;
     };
@@ -172,8 +170,7 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     {
         a = prob_parm.a_outer_dir;
         b = prob_parm.b_outer_neumann;
-    }
-    else
+    } else
     {
         a = prob_parm.a_inner_dir;
         b = prob_parm.b_inner_neumann;
@@ -182,10 +179,10 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     const Real coeff = alpha / dx[dir];
     constexpr Real eps = 1.0e-14_rt;
 
-//acoeff(intcell) +=
- //               (bscalar / ascalar) * bcoeff(intcell, 0.0) / (0.5 * dx2);
-//            rhs(intcell, rhs_comp) +=
-//                bscalar * bcoeff(intcell, 0.0) * phi_dirc / (0.5 * dx2);
+    // acoeff(intcell) +=
+    //                (bscalar / ascalar) * bcoeff(intcell, 0.0) / (0.5 * dx2);
+    //            rhs(intcell, rhs_comp) +=
+    //                bscalar * bcoeff(intcell, 0.0) * phi_dirc / (0.5 * dx2);
 
     // ---------------------------------------------------------------------
     // Pure Dirichlet
@@ -198,8 +195,9 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
 
         rhs(intcell, rhs_comp) +=
             coeff * (bc_value / a);*/
-      acoeff(intcell)+= (bscalar / ascalar) * bcoeff(intcell, 0.0) * coeff;   
-      rhs(intcell, rhs_comp) += (bscalar * bcoeff(intcell, 0.0)) * coeff * (bc_value / a);
+        acoeff(intcell) += (bscalar / ascalar) * bcoeff(intcell, 0.0) * coeff;
+        rhs(intcell, rhs_comp) +=
+            (bscalar * bcoeff(intcell, 0.0)) * coeff * (bc_value / a);
     }
 
     // ---------------------------------------------------------------------
@@ -207,25 +205,28 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     //      b * dphi/dn = f
     // ---------------------------------------------------------------------
 
-   else if (std::abs(a) < eps && std::abs(b) > eps)
+    else if (std::abs(a) < eps && std::abs(b) > eps)
     {
-       rhs(intcell, rhs_comp) += (bscalar * bcoeff(intcell, 0.0)) * coeff * bc_value / (b * alpha);
-    } 
+        rhs(intcell, rhs_comp) +=
+            (bscalar * bcoeff(intcell, 0.0)) * coeff * bc_value / (b * alpha);
+    }
     // Robin
     //      a * phi + b * dphi/dn = f
     // ---------------------------------------------------------------------
 
-// Robin:  a * phi + b * dphi/dn = f
-   else
+    // Robin:  a * phi + b * dphi/dn = f
+    else
     {
-        const Real denom = a + b * alpha;              
+        const Real denom = a + b * alpha;
         if (std::abs(denom) < eps) return;
 
-        acoeff(intcell) += (bscalar / ascalar) * bcoeff(intcell, 0.0) * coeff * (a / denom);  
-        rhs(intcell, rhs_comp) += (bscalar * bcoeff(intcell, 0.0)) * coeff * bc_value / denom;   // unchanged form, correct denom
+        acoeff(intcell) +=
+            (bscalar / ascalar) * bcoeff(intcell, 0.0) * coeff * (a / denom);
+        rhs(intcell, rhs_comp) += (bscalar * bcoeff(intcell, 0.0)) * coeff *
+                                  bc_value /
+                                  denom; // unchanged form, correct denom
     }
 }
-
 
 AMREX_GPU_HOST_DEVICE
 AMREX_FORCE_INLINE

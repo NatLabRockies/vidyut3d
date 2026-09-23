@@ -68,8 +68,7 @@ void initdomaindata(
                 xloc[1] = prob_lo[1] + (j + 0.5) * dx[1];
                 const amrex::Real rad =
                     sqrt(xloc[0] * xloc[0] + xloc[1] * xloc[1]);
-                phi(i, j, k, E_ID) =
-                    frac * (rad * rad / alpha + prob_parm->n0);
+                phi(i, j, k, E_ID) = frac * (rad * rad / alpha + prob_parm->n0);
                 phi(i, j, k, HE_ID) = 1.0;
                 phi(i, j, k, HEp_ID) =
                     frac * (rad * rad / (2.0 * alpha) + prob_parm->n0);
@@ -165,8 +164,9 @@ void init_level_with_eb(
             }
 #if (AMREX_SPACEDIM == 2)
             // A cylinder along z is a circle in 2D, but CylinderIF would need
-            // direction = 2 and trips AMREX_ASSERT(m_direction < AMREX_SPACEDIM)
-            // in an assertion-enabled build. SphereIF is the same circle.
+            // direction = 2 and trips AMREX_ASSERT(m_direction <
+            // AMREX_SPACEDIM) in an assertion-enabled build. SphereIF is the
+            // same circle.
             amrex::ignore_unused(height, axis);
             EB2::SphereIF inner_cyl(inner_r, ctr, false);
             EB2::SphereIF outer_cyl(outer_r, ctr, true);
@@ -199,9 +199,8 @@ void init_level_with_eb(
     amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> ctr_geom{};
     for (int d = 0; d < AMREX_SPACEDIM; ++d)
     {
-        ctr_geom[d] = (d < static_cast<int>(ctr_vec_geom.size()))
-                          ? ctr_vec_geom[d]
-                          : 0.0;
+        ctr_geom[d] =
+            (d < static_cast<int>(ctr_vec_geom.size())) ? ctr_vec_geom[d] : 0.0;
     }
     const amrex::Real r_mid = 0.5 * (inner_r_geom + outer_r_geom);
 
@@ -279,9 +278,13 @@ void init_level_with_eb(
     }
     AMREX_ALWAYS_ASSERT(method >= 1 && method <= 5);
     {
-        const char* mname[] = {"", "PCA plane + quadric", "PCA tangent plane",
-                               "analytical annulus",
-                               "scaled quadric + Newton", "nearest cut cell (IB-NG)"};
+        const char* mname[] = {
+            "",
+            "PCA plane + quadric",
+            "PCA tangent plane",
+            "analytical annulus",
+            "scaled quadric + Newton",
+            "nearest cut cell (IB-NG)"};
         amrex::Print() << "IB reconstruction: prob.eb_geom_method = " << method
                        << " (" << mname[method] << ")";
         if (method == 4)
@@ -289,141 +292,164 @@ void init_level_with_eb(
         amrex::Print() << "\n";
     }
     const bool use_quadric_offset = (quadric_offset != 0);
-    //const int method = 5;
+    // const int method = 5;
     if (method == 1)
     {
-    // Method 1 - Weighted least-squares plane fit followed by quadric refinement
-        // PASS 2: (a) Weighted least-squares plane fit of neighboring cut-cell
-    //             boundary centroids -> O(h^2) normal + plane foot.
-    //         (b) Quadric refinement of the foot-of-normal using a local
-    //             curvature fit in the plane-fit tangent frame -> O(h^3) foot.
-    //         We store, per regular fluid cell adjacent to the EB:
-    //           cp_arr  -> curvature-corrected foot-of-normal
-    //           nrm_arr -> curvature-corrected unit normal
-    {
-        // 2-cell search radius (requires nghost >= 2 in init_level_with_eb).
-        constexpr int RAD = 2;
-
-        for (MFIter mfi(state); mfi.isValid(); ++mfi)
+        // Method 1 - Weighted least-squares plane fit followed by quadric
+        // refinement PASS 2: (a) Weighted least-squares plane fit of
+        // neighboring cut-cell
+        //             boundary centroids -> O(h^2) normal + plane foot.
+        //         (b) Quadric refinement of the foot-of-normal using a local
+        //             curvature fit in the plane-fit tangent frame -> O(h^3)
+        //             foot.
+        //         We store, per regular fluid cell adjacent to the EB:
+        //           cp_arr  -> curvature-corrected foot-of-normal
+        //           nrm_arr -> curvature-corrected unit normal
         {
-            const Box& bx = mfi.tilebox();
-            auto const& flagfab = flags[mfi].const_array();
-            auto cp_arr = cp_mf.array(mfi);
-            auto nrm_arr = nrm_mf.array(mfi);
+            // 2-cell search radius (requires nghost >= 2 in
+            // init_level_with_eb).
+            constexpr int RAD = 2;
 
-            amrex::ParallelFor(
-                bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-                    if (!flagfab(i, j, k).isRegular()) return;
+            for (MFIter mfi(state); mfi.isValid(); ++mfi)
+            {
+                const Box& bx = mfi.tilebox();
+                auto const& flagfab = flags[mfi].const_array();
+                auto cp_arr = cp_mf.array(mfi);
+                auto nrm_arr = nrm_mf.array(mfi);
 
-                    Real cc[3] = {
-                        plo[0] + (i + 0.5) * dx[0],
-                        plo[1] + (j + 0.5) * dx[1],
-                        0.0};
+                amrex::ParallelFor(
+                    bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+                        if (!flagfab(i, j, k).isRegular()) return;
+
+                        Real cc[3] = {
+                            plo[0] + (i + 0.5) * dx[0],
+                            plo[1] + (j + 0.5) * dx[1], 0.0};
 #if (AMREX_SPACEDIM == 3)
-                    cc[2] = plo[2] + (k + 0.5) * dx[2];
+                        cc[2] = plo[2] + (k + 0.5) * dx[2];
 #endif
 
-                    // =========================================================
-                    // (a) PLANE FIT
-                    // =========================================================
+                        // =========================================================
+                        // (a) PLANE FIT
+                        // =========================================================
 
-                    // --- Weighted centroid x0 + nearest-cut reference normal ---
-                    Real wsum = 0.0;
-                    Real x0[3] = {0.0, 0.0, 0.0};
-                    Real nref[3] = {0.0, 0.0, 0.0};
-                    Real nearest_d2 = 1.0e30;
-                    int ncut = 0;
+                        // --- Weighted centroid x0 + nearest-cut reference
+                        // normal ---
+                        Real wsum = 0.0;
+                        Real x0[3] = {0.0, 0.0, 0.0};
+                        Real nref[3] = {0.0, 0.0, 0.0};
+                        Real nearest_d2 = 1.0e30;
+                        int ncut = 0;
 
 #if (AMREX_SPACEDIM == 3)
-                    for (int nk = -RAD; nk <= RAD; ++nk)
+                        for (int nk = -RAD; nk <= RAD; ++nk)
 #else
                     const int nk = 0;
 #endif
-                    for (int nj = -RAD; nj <= RAD; ++nj)
-                    for (int ni = -RAD; ni <= RAD; ++ni)
-                    {
-                        if (!flagfab(i + ni, j + nj, k + nk).isSingleValued())
-                            continue;
+                            for (int nj = -RAD; nj <= RAD; ++nj)
+                                for (int ni = -RAD; ni <= RAD; ++ni)
+                                {
+                                    if (!flagfab(i + ni, j + nj, k + nk)
+                                             .isSingleValued())
+                                        continue;
 
-                        Real p[3] = {
-                            cp_arr(i + ni, j + nj, k + nk, 0),
-                            cp_arr(i + ni, j + nj, k + nk, 1),
-                            0.0};
+                                    Real p[3] = {
+                                        cp_arr(i + ni, j + nj, k + nk, 0),
+                                        cp_arr(i + ni, j + nj, k + nk, 1), 0.0};
 #if (AMREX_SPACEDIM == 3)
-                        p[2] = cp_arr(i + ni, j + nj, k + nk, 2);
+                                    p[2] = cp_arr(i + ni, j + nj, k + nk, 2);
 #endif
-                        Real d2 = 0.0;
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                            Real diff = p[d] - cc[d];
-                            d2 += diff * diff;
-                        }
-                        Real w = 1.0 / (d2 + 1.0e-30);
-                        wsum += w;
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) x0[d] += w * p[d];
-                        ++ncut;
+                                    Real d2 = 0.0;
+                                    for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                    {
+                                        Real diff = p[d] - cc[d];
+                                        d2 += diff * diff;
+                                    }
+                                    Real w = 1.0 / (d2 + 1.0e-30);
+                                    wsum += w;
+                                    for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                        x0[d] += w * p[d];
+                                    ++ncut;
 
-                        if (d2 < nearest_d2) {
-                            nearest_d2 = d2;
-                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
-                                nref[d] = nrm_arr(i + ni, j + nj, k + nk, d);
-                        }
-                    }
+                                    if (d2 < nearest_d2)
+                                    {
+                                        nearest_d2 = d2;
+                                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                            nref[d] = nrm_arr(
+                                                i + ni, j + nj, k + nk, d);
+                                    }
+                                }
 
-                    if (ncut == 0 || wsum <= 0.0) return;
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) x0[d] /= wsum;
+                        if (ncut == 0 || wsum <= 0.0) return;
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d) x0[d] /= wsum;
 
-                    // --- Weighted covariance C ---
-                    Real C[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
+                        // --- Weighted covariance C ---
+                        Real C[3][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
 #if (AMREX_SPACEDIM == 3)
-                    for (int nk2 = -RAD; nk2 <= RAD; ++nk2)
+                        for (int nk2 = -RAD; nk2 <= RAD; ++nk2)
 #else
                     const int nk2 = 0;
 #endif
-                    for (int nj2 = -RAD; nj2 <= RAD; ++nj2)
-                    for (int ni2 = -RAD; ni2 <= RAD; ++ni2)
-                    {
-                        if (!flagfab(i + ni2, j + nj2, k + nk2).isSingleValued())
-                            continue;
+                            for (int nj2 = -RAD; nj2 <= RAD; ++nj2)
+                                for (int ni2 = -RAD; ni2 <= RAD; ++ni2)
+                                {
+                                    if (!flagfab(i + ni2, j + nj2, k + nk2)
+                                             .isSingleValued())
+                                        continue;
 
-                        Real p[3] = {
-                            cp_arr(i + ni2, j + nj2, k + nk2, 0),
-                            cp_arr(i + ni2, j + nj2, k + nk2, 1),
-                            0.0};
+                                    Real p[3] = {
+                                        cp_arr(i + ni2, j + nj2, k + nk2, 0),
+                                        cp_arr(i + ni2, j + nj2, k + nk2, 1),
+                                        0.0};
 #if (AMREX_SPACEDIM == 3)
-                        p[2] = cp_arr(i + ni2, j + nj2, k + nk2, 2);
+                                    p[2] = cp_arr(i + ni2, j + nj2, k + nk2, 2);
 #endif
-                        Real q[3] = {0,0,0};
-                        Real d2 = 0.0;
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                            q[d] = p[d] - x0[d];
-                            Real diff = p[d] - cc[d];
-                            d2 += diff * diff;
-                        }
-                        Real w = 1.0 / (d2 + 1.0e-30);
-                        for (int a = 0; a < AMREX_SPACEDIM; ++a)
-                        for (int b = 0; b < AMREX_SPACEDIM; ++b)
-                            C[a][b] += w * q[a] * q[b];
-                    }
+                                    Real q[3] = {0, 0, 0};
+                                    Real d2 = 0.0;
+                                    for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                    {
+                                        q[d] = p[d] - x0[d];
+                                        Real diff = p[d] - cc[d];
+                                        d2 += diff * diff;
+                                    }
+                                    Real w = 1.0 / (d2 + 1.0e-30);
+                                    for (int a = 0; a < AMREX_SPACEDIM; ++a)
+                                        for (int b = 0; b < AMREX_SPACEDIM; ++b)
+                                            C[a][b] += w * q[a] * q[b];
+                                }
 
-                    // --- Smallest-eigenvalue eigenvector of C = plane normal ---
-                    Real nfit[3] = {0,0,0};
+                        // --- Smallest-eigenvalue eigenvector of C = plane
+                        // normal ---
+                        Real nfit[3] = {0, 0, 0};
 #if (AMREX_SPACEDIM == 2)
-                    if (ncut < 2) {
-                        for (int d = 0; d < 2; ++d) nfit[d] = nref[d];
-                    } else {
-                        Real a = C[0][0], b = C[0][1], c = C[1][1];
-                        Real tr = a + c;
-                        Real det = a * c - b * b;
-                        Real disc = std::sqrt(std::max(0.0, tr*tr*0.25 - det));
-                        Real lam_min = tr * 0.5 - disc;
-                        Real e0[2] = { b, lam_min - a };
-                        Real e1[2] = { lam_min - c, b };
-                        Real m0 = e0[0]*e0[0] + e0[1]*e0[1];
-                        Real m1 = e1[0]*e1[0] + e1[1]*e1[1];
-                        if (m0 >= m1 && m0 > 1e-30) { nfit[0]=e0[0]; nfit[1]=e0[1]; }
-                        else if (m1 > 1e-30)        { nfit[0]=e1[0]; nfit[1]=e1[1]; }
-                        else { nfit[0]=nref[0]; nfit[1]=nref[1]; }
-                    }
+                        if (ncut < 2)
+                        {
+                            for (int d = 0; d < 2; ++d) nfit[d] = nref[d];
+                        } else
+                        {
+                            Real a = C[0][0], b = C[0][1], c = C[1][1];
+                            Real tr = a + c;
+                            Real det = a * c - b * b;
+                            Real disc =
+                                std::sqrt(std::max(0.0, tr * tr * 0.25 - det));
+                            Real lam_min = tr * 0.5 - disc;
+                            Real e0[2] = {b, lam_min - a};
+                            Real e1[2] = {lam_min - c, b};
+                            Real m0 = e0[0] * e0[0] + e0[1] * e0[1];
+                            Real m1 = e1[0] * e1[0] + e1[1] * e1[1];
+                            if (m0 >= m1 && m0 > 1e-30)
+                            {
+                                nfit[0] = e0[0];
+                                nfit[1] = e0[1];
+                            } else if (m1 > 1e-30)
+                            {
+                                nfit[0] = e1[0];
+                                nfit[1] = e1[1];
+                            } else
+                            {
+                                nfit[0] = nref[0];
+                                nfit[1] = nref[1];
+                            }
+                        }
 #else
                     if (ncut < 3) {
                         for (int d = 0; d < 3; ++d) nfit[d] = nref[d];
@@ -469,84 +495,109 @@ void init_level_with_eb(
                     }
 #endif
 
-                    // Normalize plane normal (fallback to nref if degenerate).
-                    Real nmag = 0.0;
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) nmag += nfit[d]*nfit[d];
-                    nmag = std::sqrt(nmag);
-                    if (nmag < 1e-14) {
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) nfit[d] = nref[d];
-                        nmag = 0.0;
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) nmag += nfit[d]*nfit[d];
-                        nmag = std::sqrt(nmag);
-                        if (nmag < 1e-14) return;
-                    }
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) nfit[d] /= nmag;
-
-                    // Orient plane normal to agree with nearest cut-cell normal.
-                    Real dotref = 0.0;
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) dotref += nfit[d]*nref[d];
-                    if (dotref < 0.0)
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) nfit[d] = -nfit[d];
-
-                    // =========================================================
-                    // (b) QUADRIC REFINEMENT of the foot-of-normal.
-                    // =========================================================
-
-                    // --- Tangent basis (t1, t2) orthonormal to nfit ---
-                    Real t1[3] = {0,0,0};
-                    Real t2[3] = {0,0,0};
-                    {
-                        Real ax[3] = {1,0,0};
-                        if (std::abs(nfit[0]) >= std::abs(nfit[1]) &&
-                            std::abs(nfit[0]) >= std::abs(nfit[2]))
-                        { ax[0]=0; ax[1]=1; ax[2]=0; }
-                        Real dotan = 0.0;
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) dotan += ax[d]*nfit[d];
-                        Real t1n = 0.0;
+                        // Normalize plane normal (fallback to nref if
+                        // degenerate).
+                        Real nmag = 0.0;
                         for (int d = 0; d < AMREX_SPACEDIM; ++d)
-                        { t1[d] = ax[d] - dotan*nfit[d]; t1n += t1[d]*t1[d]; }
-                        t1n = std::sqrt(t1n);
-                        if (t1n < 1e-14) {
-                            // fallback: plane foot
-                            Real distn = 0.0;
-                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
-                                distn += (cc[d] - x0[d]) * nfit[d];
-                            for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                                cp_arr(i, j, k, d)  = cc[d] - distn * nfit[d];
-                                nrm_arr(i, j, k, d) = nfit[d];
-                            }
-                            return;
-                        }
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) t1[d] /= t1n;
-                        t2[0] = nfit[1]*t1[2] - nfit[2]*t1[1];
-                        t2[1] = nfit[2]*t1[0] - nfit[0]*t1[2];
-                        t2[2] = nfit[0]*t1[1] - nfit[1]*t1[0];
-                    }
-
-                    // --- Fit quadric  w = 0.5 a u^2 + b u v + 0.5 c v^2 ---
-                    Real a_curv = 0.0, b_curv = 0.0, c_curv = 0.0;
-#if (AMREX_SPACEDIM == 2)
-                    {
-                        Real S_bw = 0.0, S_bb = 0.0;
-                        int nq = 0;
-                        for (int nj2 = -RAD; nj2 <= RAD; ++nj2)
-                        for (int ni2 = -RAD; ni2 <= RAD; ++ni2)
+                            nmag += nfit[d] * nfit[d];
+                        nmag = std::sqrt(nmag);
+                        if (nmag < 1e-14)
                         {
-                            if (!flagfab(i + ni2, j + nj2, k).isSingleValued())
-                                continue;
-                            Real p[2] = {
-                                cp_arr(i + ni2, j + nj2, k, 0),
-                                cp_arr(i + ni2, j + nj2, k, 1)};
-                            Real rel[2] = { p[0]-x0[0], p[1]-x0[1] };
-                            Real u = rel[0]*t1[0] + rel[1]*t1[1];
-                            Real w = rel[0]*nfit[0] + rel[1]*nfit[1];
-                            Real basis = 0.5*u*u;
-                            S_bw += basis*w;
-                            S_bb += basis*basis;
-                            ++nq;
+                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                nfit[d] = nref[d];
+                            nmag = 0.0;
+                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                nmag += nfit[d] * nfit[d];
+                            nmag = std::sqrt(nmag);
+                            if (nmag < 1e-14) return;
                         }
-                        a_curv = (S_bb > 1e-30 && nq >= 2) ? (S_bw / S_bb) : 0.0;
-                    }
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                            nfit[d] /= nmag;
+
+                        // Orient plane normal to agree with nearest cut-cell
+                        // normal.
+                        Real dotref = 0.0;
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                            dotref += nfit[d] * nref[d];
+                        if (dotref < 0.0)
+                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                nfit[d] = -nfit[d];
+
+                        // =========================================================
+                        // (b) QUADRIC REFINEMENT of the foot-of-normal.
+                        // =========================================================
+
+                        // --- Tangent basis (t1, t2) orthonormal to nfit ---
+                        Real t1[3] = {0, 0, 0};
+                        Real t2[3] = {0, 0, 0};
+                        {
+                            Real ax[3] = {1, 0, 0};
+                            if (std::abs(nfit[0]) >= std::abs(nfit[1]) &&
+                                std::abs(nfit[0]) >= std::abs(nfit[2]))
+                            {
+                                ax[0] = 0;
+                                ax[1] = 1;
+                                ax[2] = 0;
+                            }
+                            Real dotan = 0.0;
+                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                dotan += ax[d] * nfit[d];
+                            Real t1n = 0.0;
+                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                            {
+                                t1[d] = ax[d] - dotan * nfit[d];
+                                t1n += t1[d] * t1[d];
+                            }
+                            t1n = std::sqrt(t1n);
+                            if (t1n < 1e-14)
+                            {
+                                // fallback: plane foot
+                                Real distn = 0.0;
+                                for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                    distn += (cc[d] - x0[d]) * nfit[d];
+                                for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                {
+                                    cp_arr(i, j, k, d) =
+                                        cc[d] - distn * nfit[d];
+                                    nrm_arr(i, j, k, d) = nfit[d];
+                                }
+                                return;
+                            }
+                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                t1[d] /= t1n;
+                            t2[0] = nfit[1] * t1[2] - nfit[2] * t1[1];
+                            t2[1] = nfit[2] * t1[0] - nfit[0] * t1[2];
+                            t2[2] = nfit[0] * t1[1] - nfit[1] * t1[0];
+                        }
+
+                        // --- Fit quadric  w = 0.5 a u^2 + b u v + 0.5 c v^2
+                        // ---
+                        Real a_curv = 0.0, b_curv = 0.0, c_curv = 0.0;
+#if (AMREX_SPACEDIM == 2)
+                        {
+                            Real S_bw = 0.0, S_bb = 0.0;
+                            int nq = 0;
+                            for (int nj2 = -RAD; nj2 <= RAD; ++nj2)
+                                for (int ni2 = -RAD; ni2 <= RAD; ++ni2)
+                                {
+                                    if (!flagfab(i + ni2, j + nj2, k)
+                                             .isSingleValued())
+                                        continue;
+                                    Real p[2] = {
+                                        cp_arr(i + ni2, j + nj2, k, 0),
+                                        cp_arr(i + ni2, j + nj2, k, 1)};
+                                    Real rel[2] = {p[0] - x0[0], p[1] - x0[1]};
+                                    Real u = rel[0] * t1[0] + rel[1] * t1[1];
+                                    Real w =
+                                        rel[0] * nfit[0] + rel[1] * nfit[1];
+                                    Real basis = 0.5 * u * u;
+                                    S_bw += basis * w;
+                                    S_bb += basis * basis;
+                                    ++nq;
+                                }
+                            a_curv =
+                                (S_bb > 1e-30 && nq >= 2) ? (S_bw / S_bb) : 0.0;
+                        }
 #else
                     {
                         Real M[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
@@ -597,71 +648,86 @@ void init_level_with_eb(
                     }
 #endif
 
-                    // --- Foot on quadric + curvature-corrected normal ---
-                    Real relc[3] = {0,0,0};
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) relc[d] = cc[d] - x0[d];
-                    Real uc = 0.0, vc = 0.0;
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                        uc += relc[d]*t1[d];
+                        // --- Foot on quadric + curvature-corrected normal ---
+                        Real relc[3] = {0, 0, 0};
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                            relc[d] = cc[d] - x0[d];
+                        Real uc = 0.0, vc = 0.0;
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                        {
+                            uc += relc[d] * t1[d];
 #if (AMREX_SPACEDIM == 3)
-                        vc += relc[d]*t2[d];
+                            vc += relc[d] * t2[d];
 #endif
-                    }
-                    Real us = uc, vs = vc;
-                    Real ws = 0.5*a_curv*us*us + b_curv*us*vs + 0.5*c_curv*vs*vs;
-                    Real wu = a_curv*us + b_curv*vs;
-                    Real wv = b_curv*us + c_curv*vs;
-                    Real nl[3] = { -wu, -wv, 1.0 };
-                    Real nlmag = std::sqrt(nl[0]*nl[0]+nl[1]*nl[1]+nl[2]*nl[2]);
-                    for (int d = 0; d < 3; ++d) nl[d] /= nlmag;
+                        }
+                        Real us = uc, vs = vc;
+                        Real ws = 0.5 * a_curv * us * us + b_curv * us * vs +
+                                  0.5 * c_curv * vs * vs;
+                        Real wu = a_curv * us + b_curv * vs;
+                        Real wv = b_curv * us + c_curv * vs;
+                        Real nl[3] = {-wu, -wv, 1.0};
+                        Real nlmag = std::sqrt(
+                            nl[0] * nl[0] + nl[1] * nl[1] + nl[2] * nl[2]);
+                        for (int d = 0; d < 3; ++d) nl[d] /= nlmag;
 
-                    Real foot_w[3], norm_w[3];
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                        foot_w[d] = x0[d] + us*t1[d] + ws*nfit[d]
+                        Real foot_w[3], norm_w[3];
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                        {
+                            foot_w[d] = x0[d] + us * t1[d] + ws * nfit[d]
 #if (AMREX_SPACEDIM == 3)
-                                  + vs*t2[d]
+                                        + vs * t2[d]
 #endif
-                                  ;
-                        norm_w[d] = nl[0]*t1[d] + nl[2]*nfit[d]
+                                ;
+                            norm_w[d] = nl[0] * t1[d] + nl[2] * nfit[d]
 #if (AMREX_SPACEDIM == 3)
-                                  + nl[1]*t2[d]
+                                        + nl[1] * t2[d]
 #endif
-                                  ;
-                    }
-                    Real nwmag = 0.0;
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) nwmag += norm_w[d]*norm_w[d];
-                    nwmag = std::sqrt(nwmag);
-                    if (nwmag < 1e-14) {
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) norm_w[d] = nfit[d];
-                    } else {
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) norm_w[d] /= nwmag;
-                    }
-                    Real orient = 0.0;
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) orient += norm_w[d]*nfit[d];
-                    if (orient < 0.0)
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) norm_w[d] = -norm_w[d];
+                                ;
+                        }
+                        Real nwmag = 0.0;
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                            nwmag += norm_w[d] * norm_w[d];
+                        nwmag = std::sqrt(nwmag);
+                        if (nwmag < 1e-14)
+                        {
+                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                norm_w[d] = nfit[d];
+                        } else
+                        {
+                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                norm_w[d] /= nwmag;
+                        }
+                        Real orient = 0.0;
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                            orient += norm_w[d] * nfit[d];
+                        if (orient < 0.0)
+                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                norm_w[d] = -norm_w[d];
 
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                        cp_arr(i, j, k, d)  = foot_w[d];
-                        nrm_arr(i, j, k, d) = norm_w[d];
-                    }
-                });
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                        {
+                            cp_arr(i, j, k, d) = foot_w[d];
+                            nrm_arr(i, j, k, d) = norm_w[d];
+                        }
+                    });
+            }
         }
-    }
-    cp_mf.FillBoundary(gm.periodicity());
-    nrm_mf.FillBoundary(gm.periodicity());
-}
-else if (method == 2)
-{
-    // Method 2 - Weighted least-squares plane fit of neighboring cut-cell boundary centroids
-       // PASS 2: Weighted least-squares plane fit of neighboring cut-cell
-    //         boundary centroids. Gives an O(h^2) normal on smooth curved
-    //         surfaces (no analytic level-set required). We store, per
-    //         regular fluid cell:
-    //           cp_arr  -> foot-of-normal of the cell center on the fitted plane
-    //           nrm_arr -> fitted plane unit normal (oriented outward-ish)
+        cp_mf.FillBoundary(gm.periodicity());
+        nrm_mf.FillBoundary(gm.periodicity());
+    } else if (method == 2)
+    {
+        // Method 2 - Weighted least-squares plane fit of neighboring cut-cell
+        // boundary centroids PASS 2: Weighted least-squares plane fit of
+        // neighboring cut-cell
+        //         boundary centroids. Gives an O(h^2) normal on smooth curved
+        //         surfaces (no analytic level-set required). We store, per
+        //         regular fluid cell:
+        //           cp_arr  -> foot-of-normal of the cell center on the fitted
+        //           plane nrm_arr -> fitted plane unit normal (oriented
+        //           outward-ish)
         // Use a 2-cell search radius for robustness in thin gaps / high
-        // curvature. (Requires nghost >= 2 above; if nghost==1, change RAD to 1.)
+        // curvature. (Requires nghost >= 2 above; if nghost==1, change RAD
+        // to 1.)
         constexpr int RAD = 2; // set to 2 if you bump nghost to 2
 
         for (MFIter mfi(state); mfi.isValid(); ++mfi)
@@ -676,8 +742,7 @@ else if (method == 2)
                     if (!flagfab(i, j, k).isRegular()) return;
 
                     Real cc[3] = {
-                        plo[0] + (i + 0.5) * dx[0],
-                        plo[1] + (j + 0.5) * dx[1],
+                        plo[0] + (i + 0.5) * dx[0], plo[1] + (j + 0.5) * dx[1],
                         0.0};
 #if (AMREX_SPACEDIM == 3)
                     cc[2] = plo[2] + (k + 0.5) * dx[2];
@@ -696,95 +761,114 @@ else if (method == 2)
 #else
                     const int nk = 0;
 #endif
-                    for (int nj = -RAD; nj <= RAD; ++nj)
-                    for (int ni = -RAD; ni <= RAD; ++ni)
-                    {
-                        if (!flagfab(i + ni, j + nj, k + nk).isSingleValued())
-                            continue;
+                        for (int nj = -RAD; nj <= RAD; ++nj)
+                            for (int ni = -RAD; ni <= RAD; ++ni)
+                            {
+                                if (!flagfab(i + ni, j + nj, k + nk)
+                                         .isSingleValued())
+                                    continue;
 
-                        Real p[3] = {
-                            cp_arr(i + ni, j + nj, k + nk, 0),
-                            cp_arr(i + ni, j + nj, k + nk, 1),
-                            0.0};
+                                Real p[3] = {
+                                    cp_arr(i + ni, j + nj, k + nk, 0),
+                                    cp_arr(i + ni, j + nj, k + nk, 1), 0.0};
 #if (AMREX_SPACEDIM == 3)
-                        p[2] = cp_arr(i + ni, j + nj, k + nk, 2);
+                                p[2] = cp_arr(i + ni, j + nj, k + nk, 2);
 #endif
-                        Real d2 = 0.0;
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                            Real diff = p[d] - cc[d];
-                            d2 += diff * diff;
-                        }
-                        Real w = 1.0 / (d2 + 1.0e-30);
-                        wsum += w;
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) x0[d] += w * p[d];
-                        ++ncut;
+                                Real d2 = 0.0;
+                                for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                {
+                                    Real diff = p[d] - cc[d];
+                                    d2 += diff * diff;
+                                }
+                                Real w = 1.0 / (d2 + 1.0e-30);
+                                wsum += w;
+                                for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                    x0[d] += w * p[d];
+                                ++ncut;
 
-                        if (d2 < nearest_d2) {
-                            nearest_d2 = d2;
-                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
-                                nref[d] = nrm_arr(i + ni, j + nj, k + nk, d);
-                        }
-                    }
+                                if (d2 < nearest_d2)
+                                {
+                                    nearest_d2 = d2;
+                                    for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                        nref[d] =
+                                            nrm_arr(i + ni, j + nj, k + nk, d);
+                                }
+                            }
 
                     if (ncut == 0 || wsum <= 0.0) return; // nothing to fit
 
                     for (int d = 0; d < AMREX_SPACEDIM; ++d) x0[d] /= wsum;
 
                     // --- Build weighted covariance C = Σ w (p-x0)(p-x0)^T ---
-                    Real C[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
+                    Real C[3][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
 #if (AMREX_SPACEDIM == 3)
                     for (int nk2 = -RAD; nk2 <= RAD; ++nk2)
 #else
                     const int nk2 = 0;
 #endif
-                    for (int nj2 = -RAD; nj2 <= RAD; ++nj2)
-                    for (int ni2 = -RAD; ni2 <= RAD; ++ni2)
-                    {
-                        if (!flagfab(i + ni2, j + nj2, k + nk2).isSingleValued())
-                            continue;
+                        for (int nj2 = -RAD; nj2 <= RAD; ++nj2)
+                            for (int ni2 = -RAD; ni2 <= RAD; ++ni2)
+                            {
+                                if (!flagfab(i + ni2, j + nj2, k + nk2)
+                                         .isSingleValued())
+                                    continue;
 
-                        Real p[3] = {
-                            cp_arr(i + ni2, j + nj2, k + nk2, 0),
-                            cp_arr(i + ni2, j + nj2, k + nk2, 1),
-                            0.0};
+                                Real p[3] = {
+                                    cp_arr(i + ni2, j + nj2, k + nk2, 0),
+                                    cp_arr(i + ni2, j + nj2, k + nk2, 1), 0.0};
 #if (AMREX_SPACEDIM == 3)
-                        p[2] = cp_arr(i + ni2, j + nj2, k + nk2, 2);
+                                p[2] = cp_arr(i + ni2, j + nj2, k + nk2, 2);
 #endif
-                        Real q[3] = {0,0,0};
-                        Real d2 = 0.0;
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                            q[d] = p[d] - x0[d];
-                            Real diff = p[d] - cc[d];
-                            d2 += diff * diff;
-                        }
-                        Real w = 1.0 / (d2 + 1.0e-30);
-                        for (int a = 0; a < AMREX_SPACEDIM; ++a)
-                        for (int b = 0; b < AMREX_SPACEDIM; ++b)
-                            C[a][b] += w * q[a] * q[b];
-                    }
+                                Real q[3] = {0, 0, 0};
+                                Real d2 = 0.0;
+                                for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                {
+                                    q[d] = p[d] - x0[d];
+                                    Real diff = p[d] - cc[d];
+                                    d2 += diff * diff;
+                                }
+                                Real w = 1.0 / (d2 + 1.0e-30);
+                                for (int a = 0; a < AMREX_SPACEDIM; ++a)
+                                    for (int b = 0; b < AMREX_SPACEDIM; ++b)
+                                        C[a][b] += w * q[a] * q[b];
+                            }
 
-                    // --- Smallest-eigenvalue eigenvector of C = plane normal ---
-                    Real nfit[3] = {0,0,0};
+                    // --- Smallest-eigenvalue eigenvector of C = plane normal
+                    // ---
+                    Real nfit[3] = {0, 0, 0};
 
 #if (AMREX_SPACEDIM == 2)
                     // 2x2 symmetric: analytic smallest eigenvector.
                     // If we have <2 distinct points, fall back to nref.
-                    if (ncut < 2) {
+                    if (ncut < 2)
+                    {
                         for (int d = 0; d < 2; ++d) nfit[d] = nref[d];
-                    } else {
+                    } else
+                    {
                         Real a = C[0][0], b = C[0][1], c = C[1][1];
                         Real tr = a + c;
                         Real det = a * c - b * b;
-                        Real disc = std::sqrt(std::max(0.0, tr*tr*0.25 - det));
+                        Real disc =
+                            std::sqrt(std::max(0.0, tr * tr * 0.25 - det));
                         Real lam_min = tr * 0.5 - disc; // smallest eigenvalue
                         // eigenvector of (C - lam_min I) null space
-                        Real e0[2] = { b, lam_min - a };
-                        Real e1[2] = { lam_min - c, b };
-                        Real m0 = e0[0]*e0[0] + e0[1]*e0[1];
-                        Real m1 = e1[0]*e1[0] + e1[1]*e1[1];
-                        if (m0 >= m1 && m0 > 1e-30) { nfit[0]=e0[0]; nfit[1]=e0[1]; }
-                        else if (m1 > 1e-30)        { nfit[0]=e1[0]; nfit[1]=e1[1]; }
-                        else { nfit[0]=nref[0]; nfit[1]=nref[1]; }
+                        Real e0[2] = {b, lam_min - a};
+                        Real e1[2] = {lam_min - c, b};
+                        Real m0 = e0[0] * e0[0] + e0[1] * e0[1];
+                        Real m1 = e1[0] * e1[0] + e1[1] * e1[1];
+                        if (m0 >= m1 && m0 > 1e-30)
+                        {
+                            nfit[0] = e0[0];
+                            nfit[1] = e0[1];
+                        } else if (m1 > 1e-30)
+                        {
+                            nfit[0] = e1[0];
+                            nfit[1] = e1[1];
+                        } else
+                        {
+                            nfit[0] = nref[0];
+                            nfit[1] = nref[1];
+                        }
                     }
 #else
                     // 3x3 symmetric: cyclic Jacobi eigen-decomposition.
@@ -836,12 +920,16 @@ else if (method == 2)
 
                     // Normalize
                     Real nmag = 0.0;
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) nmag += nfit[d]*nfit[d];
+                    for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                        nmag += nfit[d] * nfit[d];
                     nmag = std::sqrt(nmag);
-                    if (nmag < 1e-14) { // degenerate fit -> fall back
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) nfit[d] = nref[d];
+                    if (nmag < 1e-14)
+                    { // degenerate fit -> fall back
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                            nfit[d] = nref[d];
                         nmag = 0.0;
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) nmag += nfit[d]*nfit[d];
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                            nmag += nfit[d] * nfit[d];
                         nmag = std::sqrt(nmag);
                         if (nmag < 1e-14) return;
                     }
@@ -850,9 +938,11 @@ else if (method == 2)
                     // Orient the fitted normal to agree with the nearest
                     // cut-cell normal (eigenvector sign is arbitrary).
                     Real dotref = 0.0;
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) dotref += nfit[d]*nref[d];
+                    for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                        dotref += nfit[d] * nref[d];
                     if (dotref < 0.0)
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) nfit[d] = -nfit[d];
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                            nfit[d] = -nfit[d];
 
                     // Foot-of-normal of the cell center onto the fitted plane:
                     //   xb = cc - ((cc - x0)·n) n
@@ -860,129 +950,29 @@ else if (method == 2)
                     for (int d = 0; d < AMREX_SPACEDIM; ++d)
                         distn += (cc[d] - x0[d]) * nfit[d];
 
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                        cp_arr(i, j, k, d)  = cc[d] - distn * nfit[d];
+                    for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                    {
+                        cp_arr(i, j, k, d) = cc[d] - distn * nfit[d];
                         nrm_arr(i, j, k, d) = nfit[d];
                     }
                 });
         }
-    cp_mf.FillBoundary(gm.periodicity());
-    nrm_mf.FillBoundary(gm.periodicity());
-    }
-    else if (method == 3)
+        cp_mf.FillBoundary(gm.periodicity());
+        nrm_mf.FillBoundary(gm.periodicity());
+    } else if (method == 3)
     {
-    // Method 3 - Analytical wall foot and outward normal for regular fluid neighbors of a cut cell
-    // -----------------------------------------------------------------
-    // PASS 2 (FIXED): regular fluid neighbors of a cut cell get the
-    // ANALYTICAL wall foot and outward normal for the annulus, computed
-    // from the fluid cell's own center. Removes the O(dx) offset caused
-    // by inheriting a cut cell's centroid/normal.
-    // -----------------------------------------------------------------
-    const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> ctr_dev = ctr_geom;
-    const amrex::Real R_in  = inner_r_geom;
-    const amrex::Real R_out = outer_r_geom;
-    const amrex::Real R_mid = r_mid;
-
-    for (MFIter mfi(state); mfi.isValid(); ++mfi)
-    {
-        const Box& bx = mfi.tilebox();
-        auto const& flagfab = flags[mfi].const_array();
-        auto cp_arr = cp_mf.array(mfi);
-        auto nrm_arr = nrm_mf.array(mfi);
-
-        amrex::ParallelFor(
-            bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-                if (!flagfab(i, j, k).isRegular()) return;
-
-                // Only overwrite for regular cells that actually touch a
-                // cut cell in the 3x3 (or 3x3x3) neighborhood.
-                bool has_cut_neighbor = false;
-                for (int nk = -1; nk <= 1 && !has_cut_neighbor; ++nk)
-                {
-                    for (int nj = -1; nj <= 1 && !has_cut_neighbor; ++nj)
-                    {
-                        for (int ni = -1; ni <= 1 && !has_cut_neighbor; ++ni)
-                        {
-                            if (flagfab(i + ni, j + nj, k + nk)
-                                    .isSingleValued())
-                            {
-                                has_cut_neighbor = true;
-                            }
-                        }
-                    }
-                }
-                if (!has_cut_neighbor) return;
-
-                // Cell center
-                amrex::Real xc[3] = {
-                    plo[0] + (i + 0.5) * dx[0],
-                    plo[1] + (j + 0.5) * dx[1],
-                    0.0
-                };
-#if (AMREX_SPACEDIM == 3)
-                xc[2] = plo[2] + (k + 0.5) * dx[2];
-#endif
-
-                // Radial coordinate in the annulus plane (x,y).
-                const amrex::Real xr = xc[0] - ctr_dev[0];
-                const amrex::Real yr = xc[1] - ctr_dev[1];
-                const amrex::Real r  = std::sqrt(xr * xr + yr * yr);
-                if (r < 1.0e-14) return; // pathological; skip
-
-                const bool use_outer = (r > R_mid);
-                const amrex::Real R_wall = use_outer ? R_out : R_in;
-
-                // Wall foot (analytical, on the true circle)
-                const amrex::Real inv_r = 1.0 / r;
-                const amrex::Real xb_x = ctr_dev[0] + R_wall * xr * inv_r;
-                const amrex::Real xb_y = ctr_dev[1] + R_wall * yr * inv_r;
-
-                // Outward normal (fluid -> solid).
-                // Outer cylinder: fluid is inside, solid outside => +r_hat.
-                // Inner cylinder: fluid is outside, solid inside => -r_hat.
-                const amrex::Real ns = use_outer ? +1.0 : -1.0;
-                const amrex::Real nx = ns * xr * inv_r;
-                const amrex::Real ny = ns * yr * inv_r;
-
-                cp_arr(i, j, k, 0) = xb_x;
-                cp_arr(i, j, k, 1) = xb_y;
-#if (AMREX_SPACEDIM == 3)
-                cp_arr(i, j, k, 2) = xc[2]; // annulus is z-invariant
-#endif
-                nrm_arr(i, j, k, 0) = nx;
-                nrm_arr(i, j, k, 1) = ny;
-#if (AMREX_SPACEDIM == 3)
-                nrm_arr(i, j, k, 2) = 0.0;
-#endif
-            });
-    }
-    }
-    else if (method == 4)
-    {
-    // Method 4 - Weighted least-squares plane fit followed by quadric refinement with h-independent conditioning
-    // -----------------------------------------------------------------
-    // PASS 2 (surface-agnostic, h-independent conditioning):
-    //   (a) Weighted least-squares PLANE fit of neighbouring cut-cell
-    //       boundary centroids -> O(h^2) normal + plane foot.
-    //   (b) QUADRIC refinement of the foot in the plane tangent frame,
-    //       followed by 1-2 Newton closest-point iterations -> O(h^3) foot.
-    //
-    //   Key robustness changes vs. the previous version:
-    //     * All fit coordinates are NON-DIMENSIONALIZED by dx (units of dx),
-    //       so the covariance / normal-equation conditioning is INDEPENDENT
-    //       of h. Curvature coeffs are rescaled back to physical units after.
-    //     * Weights are a smooth dx-scaled Gaussian (support ~ RAD*dx), not
-    //       an inverse-distance with a fixed 1e-30 floor, so the stencil
-    //       keeps effective support as h -> 0.
-    //     * The foot is refined by Newton iteration of the closest-point
-    //       condition on the fitted quadric (not a single projection).
-    //
-    //   Stored per regular fluid cell adjacent to the EB:
-    //     cp_arr  -> curvature-corrected foot-of-normal (physical coords)
-    //     nrm_arr -> curvature-corrected unit normal
-    // -----------------------------------------------------------------
-    {
-        constexpr int RAD = 2; // requires nghost >= 2
+        // Method 3 - Analytical wall foot and outward normal for regular fluid
+        // neighbors of a cut cell
+        // -----------------------------------------------------------------
+        // PASS 2 (FIXED): regular fluid neighbors of a cut cell get the
+        // ANALYTICAL wall foot and outward normal for the annulus, computed
+        // from the fluid cell's own center. Removes the O(dx) offset caused
+        // by inheriting a cut cell's centroid/normal.
+        // -----------------------------------------------------------------
+        const amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> ctr_dev = ctr_geom;
+        const amrex::Real R_in = inner_r_geom;
+        const amrex::Real R_out = outer_r_geom;
+        const amrex::Real R_mid = r_mid;
 
         for (MFIter mfi(state); mfi.isValid(); ++mfi)
         {
@@ -995,122 +985,245 @@ else if (method == 2)
                 bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
                     if (!flagfab(i, j, k).isRegular()) return;
 
-                    // Length scale for non-dimensionalization.
-                    const Real hscale = dx[0];
-                    const Real inv_h  = 1.0 / hscale;
-                    // Gaussian weight sigma ~ RAD*dx (in physical units).
-                    const Real sig2 =
-                        2.0 * (RAD * hscale) * (RAD * hscale);
+                    // Only overwrite for regular cells that actually touch a
+                    // cut cell in the 3x3 (or 3x3x3) neighborhood.
+                    bool has_cut_neighbor = false;
+                    for (int nk = -1; nk <= 1 && !has_cut_neighbor; ++nk)
+                    {
+                        for (int nj = -1; nj <= 1 && !has_cut_neighbor; ++nj)
+                        {
+                            for (int ni = -1; ni <= 1 && !has_cut_neighbor;
+                                 ++ni)
+                            {
+                                if (flagfab(i + ni, j + nj, k + nk)
+                                        .isSingleValued())
+                                {
+                                    has_cut_neighbor = true;
+                                }
+                            }
+                        }
+                    }
+                    if (!has_cut_neighbor) return;
 
-                    Real cc[3] = {
-                        plo[0] + (i + 0.5) * dx[0],
-                        plo[1] + (j + 0.5) * dx[1],
+                    // Cell center
+                    amrex::Real xc[3] = {
+                        plo[0] + (i + 0.5) * dx[0], plo[1] + (j + 0.5) * dx[1],
                         0.0};
 #if (AMREX_SPACEDIM == 3)
-                    cc[2] = plo[2] + (k + 0.5) * dx[2];
+                    xc[2] = plo[2] + (k + 0.5) * dx[2];
 #endif
 
-                    // =========================================================
-                    // (a) PLANE FIT  (all math in units of dx)
-                    // =========================================================
+                    // Radial coordinate in the annulus plane (x,y).
+                    const amrex::Real xr = xc[0] - ctr_dev[0];
+                    const amrex::Real yr = xc[1] - ctr_dev[1];
+                    const amrex::Real r = std::sqrt(xr * xr + yr * yr);
+                    if (r < 1.0e-14) return; // pathological; skip
 
-                    Real wsum = 0.0;
-                    Real x0[3] = {0.0, 0.0, 0.0};   // weighted centroid (phys)
-                    Real nref[3] = {0.0, 0.0, 0.0}; // nearest-cut normal (sign)
-                    Real nearest_d2 = 1.0e30;
-                    int  ncut = 0;
+                    const bool use_outer = (r > R_mid);
+                    const amrex::Real R_wall = use_outer ? R_out : R_in;
+
+                    // Wall foot (analytical, on the true circle)
+                    const amrex::Real inv_r = 1.0 / r;
+                    const amrex::Real xb_x = ctr_dev[0] + R_wall * xr * inv_r;
+                    const amrex::Real xb_y = ctr_dev[1] + R_wall * yr * inv_r;
+
+                    // Outward normal (fluid -> solid).
+                    // Outer cylinder: fluid is inside, solid outside => +r_hat.
+                    // Inner cylinder: fluid is outside, solid inside => -r_hat.
+                    const amrex::Real ns = use_outer ? +1.0 : -1.0;
+                    const amrex::Real nx = ns * xr * inv_r;
+                    const amrex::Real ny = ns * yr * inv_r;
+
+                    cp_arr(i, j, k, 0) = xb_x;
+                    cp_arr(i, j, k, 1) = xb_y;
+#if (AMREX_SPACEDIM == 3)
+                    cp_arr(i, j, k, 2) = xc[2]; // annulus is z-invariant
+#endif
+                    nrm_arr(i, j, k, 0) = nx;
+                    nrm_arr(i, j, k, 1) = ny;
+#if (AMREX_SPACEDIM == 3)
+                    nrm_arr(i, j, k, 2) = 0.0;
+#endif
+                });
+        }
+    } else if (method == 4)
+    {
+        // Method 4 - Weighted least-squares plane fit followed by quadric
+        // refinement with h-independent conditioning
+        // -----------------------------------------------------------------
+        // PASS 2 (surface-agnostic, h-independent conditioning):
+        //   (a) Weighted least-squares PLANE fit of neighbouring cut-cell
+        //       boundary centroids -> O(h^2) normal + plane foot.
+        //   (b) QUADRIC refinement of the foot in the plane tangent frame,
+        //       followed by 1-2 Newton closest-point iterations -> O(h^3) foot.
+        //
+        //   Key robustness changes vs. the previous version:
+        //     * All fit coordinates are NON-DIMENSIONALIZED by dx (units of
+        //     dx),
+        //       so the covariance / normal-equation conditioning is INDEPENDENT
+        //       of h. Curvature coeffs are rescaled back to physical units
+        //       after.
+        //     * Weights are a smooth dx-scaled Gaussian (support ~ RAD*dx), not
+        //       an inverse-distance with a fixed 1e-30 floor, so the stencil
+        //       keeps effective support as h -> 0.
+        //     * The foot is refined by Newton iteration of the closest-point
+        //       condition on the fitted quadric (not a single projection).
+        //
+        //   Stored per regular fluid cell adjacent to the EB:
+        //     cp_arr  -> curvature-corrected foot-of-normal (physical coords)
+        //     nrm_arr -> curvature-corrected unit normal
+        // -----------------------------------------------------------------
+        {
+            constexpr int RAD = 2; // requires nghost >= 2
+
+            for (MFIter mfi(state); mfi.isValid(); ++mfi)
+            {
+                const Box& bx = mfi.tilebox();
+                auto const& flagfab = flags[mfi].const_array();
+                auto cp_arr = cp_mf.array(mfi);
+                auto nrm_arr = nrm_mf.array(mfi);
+
+                amrex::ParallelFor(
+                    bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+                        if (!flagfab(i, j, k).isRegular()) return;
+
+                        // Length scale for non-dimensionalization.
+                        const Real hscale = dx[0];
+                        const Real inv_h = 1.0 / hscale;
+                        // Gaussian weight sigma ~ RAD*dx (in physical units).
+                        const Real sig2 = 2.0 * (RAD * hscale) * (RAD * hscale);
+
+                        Real cc[3] = {
+                            plo[0] + (i + 0.5) * dx[0],
+                            plo[1] + (j + 0.5) * dx[1], 0.0};
+#if (AMREX_SPACEDIM == 3)
+                        cc[2] = plo[2] + (k + 0.5) * dx[2];
+#endif
+
+                        // =========================================================
+                        // (a) PLANE FIT  (all math in units of dx)
+                        // =========================================================
+
+                        Real wsum = 0.0;
+                        Real x0[3] = {
+                            0.0, 0.0, 0.0}; // weighted centroid (phys)
+                        Real nref[3] = {
+                            0.0, 0.0, 0.0}; // nearest-cut normal (sign)
+                        Real nearest_d2 = 1.0e30;
+                        int ncut = 0;
 
 #if (AMREX_SPACEDIM == 3)
-                    for (int nk = -RAD; nk <= RAD; ++nk)
+                        for (int nk = -RAD; nk <= RAD; ++nk)
 #else
                     const int nk = 0;
 #endif
-                    for (int nj = -RAD; nj <= RAD; ++nj)
-                    for (int ni = -RAD; ni <= RAD; ++ni)
-                    {
-                        if (!flagfab(i + ni, j + nj, k + nk).isSingleValued())
-                            continue;
+                            for (int nj = -RAD; nj <= RAD; ++nj)
+                                for (int ni = -RAD; ni <= RAD; ++ni)
+                                {
+                                    if (!flagfab(i + ni, j + nj, k + nk)
+                                             .isSingleValued())
+                                        continue;
 
-                        Real p[3] = {
-                            cp_arr(i + ni, j + nj, k + nk, 0),
-                            cp_arr(i + ni, j + nj, k + nk, 1),
-                            0.0};
+                                    Real p[3] = {
+                                        cp_arr(i + ni, j + nj, k + nk, 0),
+                                        cp_arr(i + ni, j + nj, k + nk, 1), 0.0};
 #if (AMREX_SPACEDIM == 3)
-                        p[2] = cp_arr(i + ni, j + nj, k + nk, 2);
+                                    p[2] = cp_arr(i + ni, j + nj, k + nk, 2);
 #endif
-                        Real d2 = 0.0;
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                            Real diff = p[d] - cc[d];
-                            d2 += diff * diff;
-                        }
-                        Real w = std::exp(-d2 / sig2);   // smooth, dx-scaled
-                        wsum += w;
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
-                            x0[d] += w * p[d];
-                        ++ncut;
+                                    Real d2 = 0.0;
+                                    for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                    {
+                                        Real diff = p[d] - cc[d];
+                                        d2 += diff * diff;
+                                    }
+                                    Real w = std::exp(
+                                        -d2 / sig2); // smooth, dx-scaled
+                                    wsum += w;
+                                    for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                        x0[d] += w * p[d];
+                                    ++ncut;
 
-                        if (d2 < nearest_d2) {
-                            nearest_d2 = d2;
-                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
-                                nref[d] = nrm_arr(i + ni, j + nj, k + nk, d);
-                        }
-                    }
+                                    if (d2 < nearest_d2)
+                                    {
+                                        nearest_d2 = d2;
+                                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                            nref[d] = nrm_arr(
+                                                i + ni, j + nj, k + nk, d);
+                                    }
+                                }
 
-                    if (ncut == 0 || wsum <= 0.0) return;
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) x0[d] /= wsum;
+                        if (ncut == 0 || wsum <= 0.0) return;
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d) x0[d] /= wsum;
 
-                    // Weighted covariance C in NON-DIMENSIONAL coords q=(p-x0)/h
-                    Real C[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
+                        // Weighted covariance C in NON-DIMENSIONAL coords
+                        // q=(p-x0)/h
+                        Real C[3][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
 #if (AMREX_SPACEDIM == 3)
-                    for (int nk2 = -RAD; nk2 <= RAD; ++nk2)
+                        for (int nk2 = -RAD; nk2 <= RAD; ++nk2)
 #else
                     const int nk2 = 0;
 #endif
-                    for (int nj2 = -RAD; nj2 <= RAD; ++nj2)
-                    for (int ni2 = -RAD; ni2 <= RAD; ++ni2)
-                    {
-                        if (!flagfab(i + ni2, j + nj2, k + nk2).isSingleValued())
-                            continue;
+                            for (int nj2 = -RAD; nj2 <= RAD; ++nj2)
+                                for (int ni2 = -RAD; ni2 <= RAD; ++ni2)
+                                {
+                                    if (!flagfab(i + ni2, j + nj2, k + nk2)
+                                             .isSingleValued())
+                                        continue;
 
-                        Real p[3] = {
-                            cp_arr(i + ni2, j + nj2, k + nk2, 0),
-                            cp_arr(i + ni2, j + nj2, k + nk2, 1),
-                            0.0};
+                                    Real p[3] = {
+                                        cp_arr(i + ni2, j + nj2, k + nk2, 0),
+                                        cp_arr(i + ni2, j + nj2, k + nk2, 1),
+                                        0.0};
 #if (AMREX_SPACEDIM == 3)
-                        p[2] = cp_arr(i + ni2, j + nj2, k + nk2, 2);
+                                    p[2] = cp_arr(i + ni2, j + nj2, k + nk2, 2);
 #endif
-                        Real q[3] = {0,0,0};
-                        Real d2 = 0.0;
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                            q[d]  = (p[d] - x0[d]) * inv_h;  // non-dim
-                            Real diff = p[d] - cc[d];
-                            d2 += diff * diff;
-                        }
-                        Real w = std::exp(-d2 / sig2);
-                        for (int a = 0; a < AMREX_SPACEDIM; ++a)
-                        for (int b = 0; b < AMREX_SPACEDIM; ++b)
-                            C[a][b] += w * q[a] * q[b];
-                    }
+                                    Real q[3] = {0, 0, 0};
+                                    Real d2 = 0.0;
+                                    for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                    {
+                                        q[d] =
+                                            (p[d] - x0[d]) * inv_h; // non-dim
+                                        Real diff = p[d] - cc[d];
+                                        d2 += diff * diff;
+                                    }
+                                    Real w = std::exp(-d2 / sig2);
+                                    for (int a = 0; a < AMREX_SPACEDIM; ++a)
+                                        for (int b = 0; b < AMREX_SPACEDIM; ++b)
+                                            C[a][b] += w * q[a] * q[b];
+                                }
 
-                    // Smallest-eigenvalue eigenvector of C = plane normal.
-                    Real nfit[3] = {0,0,0};
+                        // Smallest-eigenvalue eigenvector of C = plane normal.
+                        Real nfit[3] = {0, 0, 0};
 #if (AMREX_SPACEDIM == 2)
-                    if (ncut < 2) {
-                        for (int d = 0; d < 2; ++d) nfit[d] = nref[d];
-                    } else {
-                        Real a = C[0][0], b = C[0][1], c = C[1][1];
-                        Real tr = a + c;
-                        Real det = a * c - b * b;
-                        Real disc = std::sqrt(std::max(0.0, tr*tr*0.25 - det));
-                        Real lam_min = tr * 0.5 - disc;
-                        Real e0[2] = { b, lam_min - a };
-                        Real e1[2] = { lam_min - c, b };
-                        Real m0 = e0[0]*e0[0] + e0[1]*e0[1];
-                        Real m1 = e1[0]*e1[0] + e1[1]*e1[1];
-                        if (m0 >= m1 && m0 > 1e-24) { nfit[0]=e0[0]; nfit[1]=e0[1]; }
-                        else if (m1 > 1e-24)        { nfit[0]=e1[0]; nfit[1]=e1[1]; }
-                        else { nfit[0]=nref[0]; nfit[1]=nref[1]; }
-                    }
+                        if (ncut < 2)
+                        {
+                            for (int d = 0; d < 2; ++d) nfit[d] = nref[d];
+                        } else
+                        {
+                            Real a = C[0][0], b = C[0][1], c = C[1][1];
+                            Real tr = a + c;
+                            Real det = a * c - b * b;
+                            Real disc =
+                                std::sqrt(std::max(0.0, tr * tr * 0.25 - det));
+                            Real lam_min = tr * 0.5 - disc;
+                            Real e0[2] = {b, lam_min - a};
+                            Real e1[2] = {lam_min - c, b};
+                            Real m0 = e0[0] * e0[0] + e0[1] * e0[1];
+                            Real m1 = e1[0] * e1[0] + e1[1] * e1[1];
+                            if (m0 >= m1 && m0 > 1e-24)
+                            {
+                                nfit[0] = e0[0];
+                                nfit[1] = e0[1];
+                            } else if (m1 > 1e-24)
+                            {
+                                nfit[0] = e1[0];
+                                nfit[1] = e1[1];
+                            } else
+                            {
+                                nfit[0] = nref[0];
+                                nfit[1] = nref[1];
+                            }
+                        }
 #else
                     if (ncut < 3) {
                         for (int d = 0; d < 3; ++d) nfit[d] = nref[d];
@@ -1156,127 +1269,171 @@ else if (method == 2)
                     }
 #endif
 
-                    // Normalize plane normal (fallback to nref if degenerate).
-                    Real nmag = 0.0;
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) nmag += nfit[d]*nfit[d];
-                    nmag = std::sqrt(nmag);
-                    if (nmag < 1e-14) {
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) nfit[d] = nref[d];
-                        nmag = 0.0;
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) nmag += nfit[d]*nfit[d];
-                        nmag = std::sqrt(nmag);
-                        if (nmag < 1e-14) return;
-                    }
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) nfit[d] /= nmag;
-
-                    // Orient plane normal to agree with nearest cut-cell normal.
-                    Real dotref = 0.0;
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) dotref += nfit[d]*nref[d];
-                    if (dotref < 0.0)
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) nfit[d] = -nfit[d];
-
-                    // =========================================================
-                    // (b) QUADRIC REFINEMENT (non-dimensional fit) + NEWTON foot
-                    // =========================================================
-
-                    // Tangent basis (t1, t2) orthonormal to nfit.
-                    Real t1[3] = {0,0,0};
-                    Real t2[3] = {0,0,0};
-                    {
-                        Real ax[3] = {1,0,0};
-                        if (std::abs(nfit[0]) >= std::abs(nfit[1]) &&
-                            std::abs(nfit[0]) >= std::abs(nfit[2]))
-                        { ax[0]=0; ax[1]=1; ax[2]=0; }
-                        Real dotan = 0.0;
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) dotan += ax[d]*nfit[d];
-                        Real t1n = 0.0;
+                        // Normalize plane normal (fallback to nref if
+                        // degenerate).
+                        Real nmag = 0.0;
                         for (int d = 0; d < AMREX_SPACEDIM; ++d)
-                        { t1[d] = ax[d] - dotan*nfit[d]; t1n += t1[d]*t1[d]; }
-                        t1n = std::sqrt(t1n);
-                        if (t1n < 1e-14) {
-                            // fallback: plane foot (non-dim distn back to phys)
-                            Real distn = 0.0;
-                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
-                                distn += (cc[d] - x0[d]) * nfit[d];
-                            for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                                cp_arr(i, j, k, d)  = cc[d] - distn * nfit[d];
-                                nrm_arr(i, j, k, d) = nfit[d];
-                            }
-                            return;
-                        }
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) t1[d] /= t1n;
-                        t2[0] = nfit[1]*t1[2] - nfit[2]*t1[1];
-                        t2[1] = nfit[2]*t1[0] - nfit[0]*t1[2];
-                        t2[2] = nfit[0]*t1[1] - nfit[1]*t1[0];
-                    }
-
-                    // Fit quadric  w = 0.5 a u^2 + b u v + 0.5 c v^2  in NON-DIM
-                    // (u,v,w) = (rel.t1, rel.t2, rel.nfit)/h. Curvature coeffs
-                    // a,b,c are then in units of 1/h; rescale on use below.
-                    // c0_nd, c1_nd: offset and slope of the surface relative
-                    // to the plane through the weighted centroid x0. Points on a
-                    // curved wall have a centroid that lies OFF the wall by
-                    // ~0.5*kappa*var(u) = O(h^2); without c0 the fitted foot
-                    // inherits that bias.
-                    Real a_nd = 0.0, b_nd = 0.0, c_nd = 0.0;
-                    Real c0_nd = 0.0, c1_nd = 0.0;
-#if (AMREX_SPACEDIM == 2)
-                    {
-                        Real S_bw = 0.0, S_bb = 0.0;
-                        Real Mq[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
-                        Real rq3[3] = {0,0,0};
-                        int nq = 0;
-                        for (int nj2 = -RAD; nj2 <= RAD; ++nj2)
-                        for (int ni2 = -RAD; ni2 <= RAD; ++ni2)
+                            nmag += nfit[d] * nfit[d];
+                        nmag = std::sqrt(nmag);
+                        if (nmag < 1e-14)
                         {
-                            if (!flagfab(i + ni2, j + nj2, k).isSingleValued())
-                                continue;
-                            Real p[2] = {
-                                cp_arr(i + ni2, j + nj2, k, 0),
-                                cp_arr(i + ni2, j + nj2, k, 1)};
-                            Real rel[2] = {(p[0]-x0[0])*inv_h,
-                                           (p[1]-x0[1])*inv_h};
-                            Real u = rel[0]*t1[0] + rel[1]*t1[1];
-                            Real w = rel[0]*nfit[0] + rel[1]*nfit[1];
-                            Real basis = 0.5*u*u;
-                            // Gaussian weight (recompute in phys distance)
-                            Real d2 = 0.0;
-                            { Real dxp0=p[0]-cc[0], dxp1=p[1]-cc[1];
-                              d2 = dxp0*dxp0 + dxp1*dxp1; }
-                            Real wt = std::exp(-d2 / sig2);
-                            S_bw += wt*basis*w;
-                            S_bb += wt*basis*basis;
-                            const Real g3[3] = {1.0, u, basis};
-                            for (int a = 0; a < 3; ++a) {
-                                rq3[a] += wt*g3[a]*w;
-                                for (int b = 0; b < 3; ++b)
-                                    Mq[a][b] += wt*g3[a]*g3[b];
+                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                nfit[d] = nref[d];
+                            nmag = 0.0;
+                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                nmag += nfit[d] * nfit[d];
+                            nmag = std::sqrt(nmag);
+                            if (nmag < 1e-14) return;
+                        }
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                            nfit[d] /= nmag;
+
+                        // Orient plane normal to agree with nearest cut-cell
+                        // normal.
+                        Real dotref = 0.0;
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                            dotref += nfit[d] * nref[d];
+                        if (dotref < 0.0)
+                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                nfit[d] = -nfit[d];
+
+                        // =========================================================
+                        // (b) QUADRIC REFINEMENT (non-dimensional fit) + NEWTON
+                        // foot
+                        // =========================================================
+
+                        // Tangent basis (t1, t2) orthonormal to nfit.
+                        Real t1[3] = {0, 0, 0};
+                        Real t2[3] = {0, 0, 0};
+                        {
+                            Real ax[3] = {1, 0, 0};
+                            if (std::abs(nfit[0]) >= std::abs(nfit[1]) &&
+                                std::abs(nfit[0]) >= std::abs(nfit[2]))
+                            {
+                                ax[0] = 0;
+                                ax[1] = 1;
+                                ax[2] = 0;
                             }
-                            ++nq;
+                            Real dotan = 0.0;
+                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                dotan += ax[d] * nfit[d];
+                            Real t1n = 0.0;
+                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                            {
+                                t1[d] = ax[d] - dotan * nfit[d];
+                                t1n += t1[d] * t1[d];
+                            }
+                            t1n = std::sqrt(t1n);
+                            if (t1n < 1e-14)
+                            {
+                                // fallback: plane foot (non-dim distn back to
+                                // phys)
+                                Real distn = 0.0;
+                                for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                    distn += (cc[d] - x0[d]) * nfit[d];
+                                for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                {
+                                    cp_arr(i, j, k, d) =
+                                        cc[d] - distn * nfit[d];
+                                    nrm_arr(i, j, k, d) = nfit[d];
+                                }
+                                return;
+                            }
+                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                t1[d] /= t1n;
+                            t2[0] = nfit[1] * t1[2] - nfit[2] * t1[1];
+                            t2[1] = nfit[2] * t1[0] - nfit[0] * t1[2];
+                            t2[2] = nfit[0] * t1[1] - nfit[1] * t1[0];
                         }
-                        // full fit  w = c0 + c1 u + 0.5 a u^2  (Cramer)
-                        const Real det3 =
-                            Mq[0][0]*(Mq[1][1]*Mq[2][2]-Mq[1][2]*Mq[2][1])
-                          - Mq[0][1]*(Mq[1][0]*Mq[2][2]-Mq[1][2]*Mq[2][0])
-                          + Mq[0][2]*(Mq[1][0]*Mq[2][1]-Mq[1][1]*Mq[2][0]);
-                        if (use_quadric_offset && nq >= 4 && std::abs(det3) > 1e-12) {
-                            const Real inv3 = 1.0/det3;
-                            c0_nd = inv3*(
-                                rq3[0]*(Mq[1][1]*Mq[2][2]-Mq[1][2]*Mq[2][1])
-                              - Mq[0][1]*(rq3[1]*Mq[2][2]-Mq[1][2]*rq3[2])
-                              + Mq[0][2]*(rq3[1]*Mq[2][1]-Mq[1][1]*rq3[2]));
-                            c1_nd = inv3*(
-                                Mq[0][0]*(rq3[1]*Mq[2][2]-Mq[1][2]*rq3[2])
-                              - rq3[0]*(Mq[1][0]*Mq[2][2]-Mq[1][2]*Mq[2][0])
-                              + Mq[0][2]*(Mq[1][0]*rq3[2]-rq3[1]*Mq[2][0]));
-                            a_nd = inv3*(
-                                Mq[0][0]*(Mq[1][1]*rq3[2]-rq3[1]*Mq[2][1])
-                              - Mq[0][1]*(Mq[1][0]*rq3[2]-rq3[1]*Mq[2][0])
-                              + rq3[0]*(Mq[1][0]*Mq[2][1]-Mq[1][1]*Mq[2][0]));
-                        } else {
-                            a_nd = (S_bb > 1e-20 && nq >= 2) ? (S_bw / S_bb) : 0.0;
+
+                        // Fit quadric  w = 0.5 a u^2 + b u v + 0.5 c v^2  in
+                        // NON-DIM (u,v,w) = (rel.t1, rel.t2, rel.nfit)/h.
+                        // Curvature coeffs a,b,c are then in units of 1/h;
+                        // rescale on use below. c0_nd, c1_nd: offset and slope
+                        // of the surface relative to the plane through the
+                        // weighted centroid x0. Points on a curved wall have a
+                        // centroid that lies OFF the wall by ~0.5*kappa*var(u)
+                        // = O(h^2); without c0 the fitted foot inherits that
+                        // bias.
+                        Real a_nd = 0.0, b_nd = 0.0, c_nd = 0.0;
+                        Real c0_nd = 0.0, c1_nd = 0.0;
+#if (AMREX_SPACEDIM == 2)
+                        {
+                            Real S_bw = 0.0, S_bb = 0.0;
+                            Real Mq[3][3] = {{0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
+                            Real rq3[3] = {0, 0, 0};
+                            int nq = 0;
+                            for (int nj2 = -RAD; nj2 <= RAD; ++nj2)
+                                for (int ni2 = -RAD; ni2 <= RAD; ++ni2)
+                                {
+                                    if (!flagfab(i + ni2, j + nj2, k)
+                                             .isSingleValued())
+                                        continue;
+                                    Real p[2] = {
+                                        cp_arr(i + ni2, j + nj2, k, 0),
+                                        cp_arr(i + ni2, j + nj2, k, 1)};
+                                    Real rel[2] = {
+                                        (p[0] - x0[0]) * inv_h,
+                                        (p[1] - x0[1]) * inv_h};
+                                    Real u = rel[0] * t1[0] + rel[1] * t1[1];
+                                    Real w =
+                                        rel[0] * nfit[0] + rel[1] * nfit[1];
+                                    Real basis = 0.5 * u * u;
+                                    // Gaussian weight (recompute in phys
+                                    // distance)
+                                    Real d2 = 0.0;
+                                    {
+                                        Real dxp0 = p[0] - cc[0],
+                                             dxp1 = p[1] - cc[1];
+                                        d2 = dxp0 * dxp0 + dxp1 * dxp1;
+                                    }
+                                    Real wt = std::exp(-d2 / sig2);
+                                    S_bw += wt * basis * w;
+                                    S_bb += wt * basis * basis;
+                                    const Real g3[3] = {1.0, u, basis};
+                                    for (int a = 0; a < 3; ++a)
+                                    {
+                                        rq3[a] += wt * g3[a] * w;
+                                        for (int b = 0; b < 3; ++b)
+                                            Mq[a][b] += wt * g3[a] * g3[b];
+                                    }
+                                    ++nq;
+                                }
+                            // full fit  w = c0 + c1 u + 0.5 a u^2  (Cramer)
+                            const Real det3 = Mq[0][0] * (Mq[1][1] * Mq[2][2] -
+                                                          Mq[1][2] * Mq[2][1]) -
+                                              Mq[0][1] * (Mq[1][0] * Mq[2][2] -
+                                                          Mq[1][2] * Mq[2][0]) +
+                                              Mq[0][2] * (Mq[1][0] * Mq[2][1] -
+                                                          Mq[1][1] * Mq[2][0]);
+                            if (use_quadric_offset && nq >= 4 &&
+                                std::abs(det3) > 1e-12)
+                            {
+                                const Real inv3 = 1.0 / det3;
+                                c0_nd = inv3 * (rq3[0] * (Mq[1][1] * Mq[2][2] -
+                                                          Mq[1][2] * Mq[2][1]) -
+                                                Mq[0][1] * (rq3[1] * Mq[2][2] -
+                                                            Mq[1][2] * rq3[2]) +
+                                                Mq[0][2] * (rq3[1] * Mq[2][1] -
+                                                            Mq[1][1] * rq3[2]));
+                                c1_nd = inv3 * (Mq[0][0] * (rq3[1] * Mq[2][2] -
+                                                            Mq[1][2] * rq3[2]) -
+                                                rq3[0] * (Mq[1][0] * Mq[2][2] -
+                                                          Mq[1][2] * Mq[2][0]) +
+                                                Mq[0][2] * (Mq[1][0] * rq3[2] -
+                                                            rq3[1] * Mq[2][0]));
+                                a_nd = inv3 * (Mq[0][0] * (Mq[1][1] * rq3[2] -
+                                                           rq3[1] * Mq[2][1]) -
+                                               Mq[0][1] * (Mq[1][0] * rq3[2] -
+                                                           rq3[1] * Mq[2][0]) +
+                                               rq3[0] * (Mq[1][0] * Mq[2][1] -
+                                                         Mq[1][1] * Mq[2][0]));
+                            } else
+                            {
+                                a_nd = (S_bb > 1e-20 && nq >= 2) ? (S_bw / S_bb)
+                                                                 : 0.0;
+                            }
                         }
-                    }
 #else
                     {
                         Real M[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
@@ -1333,152 +1490,170 @@ else if (method == 2)
                     }
 #endif
 
-                    // Non-dim target of the cell center in the (u,v,w) frame.
-                    Real relc[3] = {0,0,0};
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d)
-                        relc[d] = (cc[d] - x0[d]) * inv_h;
-                    Real uc = 0.0, vc = 0.0, wc = 0.0;
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                        uc += relc[d]*t1[d];
-                        wc += relc[d]*nfit[d];
+                        // Non-dim target of the cell center in the (u,v,w)
+                        // frame.
+                        Real relc[3] = {0, 0, 0};
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                            relc[d] = (cc[d] - x0[d]) * inv_h;
+                        Real uc = 0.0, vc = 0.0, wc = 0.0;
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                        {
+                            uc += relc[d] * t1[d];
+                            wc += relc[d] * nfit[d];
 #if (AMREX_SPACEDIM == 3)
-                        vc += relc[d]*t2[d];
+                            vc += relc[d] * t2[d];
 #endif
-                    }
+                        }
 
-                    // Newton closest-point on quadric w(u,v)=0.5a u^2 + b uv + 0.5c v^2
-                    Real us = uc, vs = vc;
-                    for (int it = 0; it < 2; ++it) {
-                        Real wq = c0_nd + c1_nd*us
-                                + 0.5*a_nd*us*us + b_nd*us*vs + 0.5*c_nd*vs*vs;
-                        Real wu = c1_nd + a_nd*us + b_nd*vs;   // dw/du
-                        Real wv = b_nd*us + c_nd*vs;   // dw/dv
-                        // minimize |(us-uc, vs-vc, wq-wc)|^2 along tangent
-                        Real gu  = (us - uc) + (wq - wc)*wu;
-                        Real guu = 1.0 + wu*wu + (wq - wc)*a_nd;
-                        if (std::abs(guu) > 1e-20) us -= gu/guu;
+                        // Newton closest-point on quadric w(u,v)=0.5a u^2 + b
+                        // uv + 0.5c v^2
+                        Real us = uc, vs = vc;
+                        for (int it = 0; it < 2; ++it)
+                        {
+                            Real wq = c0_nd + c1_nd * us +
+                                      0.5 * a_nd * us * us + b_nd * us * vs +
+                                      0.5 * c_nd * vs * vs;
+                            Real wu = c1_nd + a_nd * us + b_nd * vs; // dw/du
+                            Real wv = b_nd * us + c_nd * vs;         // dw/dv
+                            // minimize |(us-uc, vs-vc, wq-wc)|^2 along tangent
+                            Real gu = (us - uc) + (wq - wc) * wu;
+                            Real guu = 1.0 + wu * wu + (wq - wc) * a_nd;
+                            if (std::abs(guu) > 1e-20) us -= gu / guu;
 #if (AMREX_SPACEDIM == 3)
-                        Real gv  = (vs - vc) + (wq - wc)*wv;
-                        Real gvv = 1.0 + wv*wv + (wq - wc)*c_nd;
-                        if (std::abs(gvv) > 1e-20) vs -= gv/gvv;
+                            Real gv = (vs - vc) + (wq - wc) * wv;
+                            Real gvv = 1.0 + wv * wv + (wq - wc) * c_nd;
+                            if (std::abs(gvv) > 1e-20) vs -= gv / gvv;
 #endif
-                    }
+                        }
 
-                    Real ws = c0_nd + c1_nd*us
-                            + 0.5*a_nd*us*us + b_nd*us*vs + 0.5*c_nd*vs*vs;
-                    Real wu = c1_nd + a_nd*us + b_nd*vs;
-                    Real wv = b_nd*us + c_nd*vs;
+                        Real ws = c0_nd + c1_nd * us + 0.5 * a_nd * us * us +
+                                  b_nd * us * vs + 0.5 * c_nd * vs * vs;
+                        Real wu = c1_nd + a_nd * us + b_nd * vs;
+                        Real wv = b_nd * us + c_nd * vs;
 
-                    // Local surface normal in (t1,t2,nfit) frame: (-wu,-wv,1).
-                    Real nl[3] = { -wu, -wv, 1.0 };
-                    Real nlmag = std::sqrt(nl[0]*nl[0]+nl[1]*nl[1]+nl[2]*nl[2]);
-                    for (int d = 0; d < 3; ++d) nl[d] /= nlmag;
+                        // Local surface normal in (t1,t2,nfit) frame:
+                        // (-wu,-wv,1).
+                        Real nl[3] = {-wu, -wv, 1.0};
+                        Real nlmag = std::sqrt(
+                            nl[0] * nl[0] + nl[1] * nl[1] + nl[2] * nl[2]);
+                        for (int d = 0; d < 3; ++d) nl[d] /= nlmag;
 
-                    // Map foot & normal back to PHYSICAL coords (rescale by h).
-                    Real foot_w[3], norm_w[3];
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                        foot_w[d] = x0[d]
-                                  + hscale * ( us*t1[d] + ws*nfit[d]
+                        // Map foot & normal back to PHYSICAL coords (rescale by
+                        // h).
+                        Real foot_w[3], norm_w[3];
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                        {
+                            foot_w[d] =
+                                x0[d] + hscale * (us * t1[d] + ws * nfit[d]
 #if (AMREX_SPACEDIM == 3)
-                                             + vs*t2[d]
+                                                  + vs * t2[d]
 #endif
-                                             );
-                        norm_w[d] = nl[0]*t1[d] + nl[2]*nfit[d]
+                                                 );
+                            norm_w[d] = nl[0] * t1[d] + nl[2] * nfit[d]
 #if (AMREX_SPACEDIM == 3)
-                                  + nl[1]*t2[d]
+                                        + nl[1] * t2[d]
 #endif
-                                  ;
-                    }
-                    Real nwmag = 0.0;
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) nwmag += norm_w[d]*norm_w[d];
-                    nwmag = std::sqrt(nwmag);
-                    if (nwmag < 1e-14) {
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) norm_w[d] = nfit[d];
-                    } else {
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) norm_w[d] /= nwmag;
-                    }
-                    Real orient = 0.0;
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) orient += norm_w[d]*nfit[d];
-                    if (orient < 0.0)
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) norm_w[d] = -norm_w[d];
+                                ;
+                        }
+                        Real nwmag = 0.0;
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                            nwmag += norm_w[d] * norm_w[d];
+                        nwmag = std::sqrt(nwmag);
+                        if (nwmag < 1e-14)
+                        {
+                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                norm_w[d] = nfit[d];
+                        } else
+                        {
+                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                norm_w[d] /= nwmag;
+                        }
+                        Real orient = 0.0;
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                            orient += norm_w[d] * nfit[d];
+                        if (orient < 0.0)
+                            for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                                norm_w[d] = -norm_w[d];
 
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) {
-                        cp_arr(i, j, k, d)  = foot_w[d];
-                        nrm_arr(i, j, k, d) = norm_w[d];
-                    }
-                });
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d)
+                        {
+                            cp_arr(i, j, k, d) = foot_w[d];
+                            nrm_arr(i, j, k, d) = norm_w[d];
+                        }
+                    });
+            }
         }
-    }
-    cp_mf.FillBoundary(gm.periodicity());
-    nrm_mf.FillBoundary(gm.periodicity());
-    }
-    else if (method == 5)
+        cp_mf.FillBoundary(gm.periodicity());
+        nrm_mf.FillBoundary(gm.periodicity());
+    } else if (method == 5)
     {
-    // Method 5 -   EB Copy 
-// PASS 2: Fluid neighbors inherit geometric data
-    for (MFIter mfi(state); mfi.isValid(); ++mfi)
-    {
-        const Box& bx = mfi.tilebox();
-        auto const& flagfab = flags[mfi].const_array();
-        auto cp_arr = cp_mf.array(mfi);
-        auto nrm_arr = nrm_mf.array(mfi);
+        // Method 5 -   EB Copy
+        // PASS 2: Fluid neighbors inherit geometric data
+        for (MFIter mfi(state); mfi.isValid(); ++mfi)
+        {
+            const Box& bx = mfi.tilebox();
+            auto const& flagfab = flags[mfi].const_array();
+            auto cp_arr = cp_mf.array(mfi);
+            auto nrm_arr = nrm_mf.array(mfi);
 
-        amrex::ParallelFor(
-            bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-                if (flagfab(i, j, k).isRegular())
-                {
-                    Real cell_center[3] = {
-                        plo[0] + (i + 0.5) * dx[0], plo[1] + (j + 0.5) * dx[1],
-                        0.0};
+            amrex::ParallelFor(
+                bx, [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+                    if (flagfab(i, j, k).isRegular())
+                    {
+                        Real cell_center[3] = {
+                            plo[0] + (i + 0.5) * dx[0],
+                            plo[1] + (j + 0.5) * dx[1], 0.0};
 #if (AMREX_SPACEDIM == 3)
-                    cell_center[2] = plo[2] + (k + 0.5) * dx[2];
+                        cell_center[2] = plo[2] + (k + 0.5) * dx[2];
 #endif
-                    Real best_d2 = 1e30;
+                        Real best_d2 = 1e30;
                     // in 2D the k index has a single valid value
 #if (AMREX_SPACEDIM == 3)
-                    const int nk_lo = -1, nk_hi = 1;
+                        const int nk_lo = -1, nk_hi = 1;
 #else
                     const int nk_lo = 0, nk_hi = 0;
 #endif
-                    for (int nk = nk_lo; nk <= nk_hi; ++nk)
-                    {
-                        for (int nj = -1; nj <= 1; ++nj)
+                        for (int nk = nk_lo; nk <= nk_hi; ++nk)
                         {
-                            for (int ni = -1; ni <= 1; ++ni)
+                            for (int nj = -1; nj <= 1; ++nj)
                             {
-                                if (flagfab(i + ni, j + nj, k + nk)
-                                        .isSingleValued())
+                                for (int ni = -1; ni <= 1; ++ni)
                                 {
-                                    Real d2 = 0;
-                                    for (int n = 0; n < AMREX_SPACEDIM; ++n)
+                                    if (flagfab(i + ni, j + nj, k + nk)
+                                            .isSingleValued())
                                     {
-                                        Real diff =
-                                            cp_arr(i + ni, j + nj, k + nk, n) -
-                                            cell_center[n];
-                                        d2 += diff * diff;
-                                    }
-                                    if (d2 < best_d2)
-                                    {
-                                        best_d2 = d2;
+                                        Real d2 = 0;
                                         for (int n = 0; n < AMREX_SPACEDIM; ++n)
                                         {
-                                            cp_arr(i, j, k, n) = cp_arr(
-                                                i + ni, j + nj, k + nk, n);
-                                            nrm_arr(i, j, k, n) = nrm_arr(
-                                                i + ni, j + nj, k + nk, n);
+                                            Real diff =
+                                                cp_arr(
+                                                    i + ni, j + nj, k + nk, n) -
+                                                cell_center[n];
+                                            d2 += diff * diff;
+                                        }
+                                        if (d2 < best_d2)
+                                        {
+                                            best_d2 = d2;
+                                            for (int n = 0; n < AMREX_SPACEDIM;
+                                                 ++n)
+                                            {
+                                                cp_arr(i, j, k, n) = cp_arr(
+                                                    i + ni, j + nj, k + nk, n);
+                                                nrm_arr(i, j, k, n) = nrm_arr(
+                                                    i + ni, j + nj, k + nk, n);
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
                     }
-                }
-            });
+                });
+        }
+        cp_mf.FillBoundary(gm.periodicity());
+        nrm_mf.FillBoundary(gm.periodicity());
     }
-    cp_mf.FillBoundary(gm.periodicity());
-    nrm_mf.FillBoundary(gm.periodicity());
-    }
- 
+
     // ============================================================
     // -----------------------------------------------------------------
     // Final: copy vfrac + (cp, nrm) into the state MultiFab components

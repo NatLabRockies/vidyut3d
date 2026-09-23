@@ -197,8 +197,8 @@ void init_level_with_eb(
                     cell_center[2] = plo[2] + (k + 0.5) * dx[2];
 #endif
                     Real best_d2 = 1e30;
-                    // In 2D the k index has a single valid value, so the
-                    // neighbour sweep must not step off it.
+                // In 2D the k index has a single valid value, so the
+                // neighbour sweep must not step off it.
 #if (AMREX_SPACEDIM == 3)
                     const int nk_lo = -1, nk_hi = 1;
 #else
@@ -243,12 +243,13 @@ void init_level_with_eb(
     //         boundary centroids. Gives an O(h^2) normal on smooth curved
     //         surfaces (no analytic level-set required). We store, per
     //         regular fluid cell:
-    //           cp_arr  -> foot-of-normal of the cell center on the fitted plane
+    //           cp_arr  -> foot-of-normal of the cell center on the fitted
+plane
     //           nrm_arr -> fitted plane unit normal (oriented outward-ish)
     {
         // Use a 2-cell search radius for robustness in thin gaps / high
-        // curvature. (Requires nghost >= 2 above; if nghost==1, change RAD to 1.)
-        constexpr int RAD = 1; // set to 2 if you bump nghost to 2
+        // curvature. (Requires nghost >= 2 above; if nghost==1, change RAD
+to 1.) constexpr int RAD = 1; // set to 2 if you bump nghost to 2
 
         for (MFIter mfi(state); mfi.isValid(); ++mfi)
         {
@@ -302,7 +303,8 @@ void init_level_with_eb(
                         }
                         Real w = 1.0 / (d2 + 1.0e-30);
                         wsum += w;
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) x0[d] += w * p[d];
+                        for (int d = 0; d < AMREX_SPACEDIM; ++d) x0[d] += w *
+p[d];
                         ++ncut;
 
                         if (d2 < nearest_d2) {
@@ -326,8 +328,8 @@ void init_level_with_eb(
                     for (int nj2 = -RAD; nj2 <= RAD; ++nj2)
                     for (int ni2 = -RAD; ni2 <= RAD; ++ni2)
                     {
-                        if (!flagfab(i + ni2, j + nj2, k + nk2).isSingleValued())
-                            continue;
+                        if (!flagfab(i + ni2, j + nj2, k +
+nk2).isSingleValued()) continue;
 
                         Real p[3] = {
                             cp_arr(i + ni2, j + nj2, k + nk2, 0),
@@ -349,8 +351,8 @@ void init_level_with_eb(
                             C[a][b] += w * q[a] * q[b];
                     }
 
-                    // --- Smallest-eigenvalue eigenvector of C = plane normal ---
-                    Real nfit[3] = {0,0,0};
+                    // --- Smallest-eigenvalue eigenvector of C = plane normal
+--- Real nfit[3] = {0,0,0};
 
 #if (AMREX_SPACEDIM == 2)
                     // 2x2 symmetric: analytic smallest eigenvector.
@@ -368,8 +370,8 @@ void init_level_with_eb(
                         Real e1[2] = { lam_min - c, b };
                         Real m0 = e0[0]*e0[0] + e0[1]*e0[1];
                         Real m1 = e1[0]*e1[0] + e1[1]*e1[1];
-                        if (m0 >= m1 && m0 > 1e-30) { nfit[0]=e0[0]; nfit[1]=e0[1]; }
-                        else if (m1 > 1e-30)        { nfit[0]=e1[0]; nfit[1]=e1[1]; }
+                        if (m0 >= m1 && m0 > 1e-30) { nfit[0]=e0[0];
+nfit[1]=e0[1]; } else if (m1 > 1e-30)        { nfit[0]=e1[0]; nfit[1]=e1[1]; }
                         else { nfit[0]=nref[0]; nfit[1]=nref[1]; }
                     }
 #else
@@ -378,9 +380,9 @@ void init_level_with_eb(
                         for (int d = 0; d < 3; ++d) nfit[d] = nref[d];
                     } else {
                         Real A[3][3];
-                        for (int a=0;a<3;++a) for (int b=0;b<3;++b) A[a][b]=C[a][b];
-                        Real V[3][3] = {{1,0,0},{0,1,0},{0,0,1}};
-                        for (int sweep = 0; sweep < 8; ++sweep) {
+                        for (int a=0;a<3;++a) for (int b=0;b<3;++b)
+A[a][b]=C[a][b]; Real V[3][3] = {{1,0,0},{0,1,0},{0,0,1}}; for (int sweep = 0;
+sweep < 8; ++sweep) {
                             // off-diagonal magnitude
                             Real off = A[0][1]*A[0][1] + A[0][2]*A[0][2]
                                      + A[1][2]*A[1][2];
@@ -422,23 +424,20 @@ void init_level_with_eb(
 
                     // Normalize
                     Real nmag = 0.0;
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) nmag += nfit[d]*nfit[d];
-                    nmag = std::sqrt(nmag);
-                    if (nmag < 1e-14) { // degenerate fit -> fall back
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) nfit[d] = nref[d];
-                        nmag = 0.0;
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) nmag += nfit[d]*nfit[d];
-                        nmag = std::sqrt(nmag);
-                        if (nmag < 1e-14) return;
+                    for (int d = 0; d < AMREX_SPACEDIM; ++d) nmag +=
+nfit[d]*nfit[d]; nmag = std::sqrt(nmag); if (nmag < 1e-14) { // degenerate fit
+-> fall back for (int d = 0; d < AMREX_SPACEDIM; ++d) nfit[d] = nref[d]; nmag =
+0.0; for (int d = 0; d < AMREX_SPACEDIM; ++d) nmag += nfit[d]*nfit[d]; nmag =
+std::sqrt(nmag); if (nmag < 1e-14) return;
                     }
                     for (int d = 0; d < AMREX_SPACEDIM; ++d) nfit[d] /= nmag;
 
                     // Orient the fitted normal to agree with the nearest
                     // cut-cell normal (eigenvector sign is arbitrary).
                     Real dotref = 0.0;
-                    for (int d = 0; d < AMREX_SPACEDIM; ++d) dotref += nfit[d]*nref[d];
-                    if (dotref < 0.0)
-                        for (int d = 0; d < AMREX_SPACEDIM; ++d) nfit[d] = -nfit[d];
+                    for (int d = 0; d < AMREX_SPACEDIM; ++d) dotref +=
+nfit[d]*nref[d]; if (dotref < 0.0) for (int d = 0; d < AMREX_SPACEDIM; ++d)
+nfit[d] = -nfit[d];
 
                     // Foot-of-normal of the cell center onto the fitted plane:
                     //   xb = cc - ((cc - x0)·n) n

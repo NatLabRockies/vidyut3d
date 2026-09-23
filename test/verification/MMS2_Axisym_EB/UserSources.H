@@ -47,7 +47,7 @@ AMREX_GPU_DEVICE AMREX_INLINE void add_user_react_sources(
     xloc[1] = prob_lo[1] + (j + 0.5) * dx[1];
     const amrex::Real rad = std::sqrt(xloc[0] * xloc[0] + xloc[1] * xloc[1]);
 
-    const amrex::Real n0    = prob_parm.n0;
+    const amrex::Real n0 = prob_parm.n0;
     const amrex::Real alpha = ECHARGE / EPS0;
 
     const amrex::Real r2 = rad * rad;
@@ -60,36 +60,35 @@ AMREX_GPU_DEVICE AMREX_INLINE void add_user_react_sources(
 
     // Transport coefficients (match Chemistry.H specMob/specDiff).
     const amrex::Real mue = -1.0;
-    const amrex::Real De  =  1.0;
-    const amrex::Real mui =  0.5;
-    const amrex::Real Di  =  0.5;
+    const amrex::Real De = 1.0;
+    const amrex::Real mui = 0.5;
+    const amrex::Real Di = 0.5;
 
     // ---- Cartesian differential quantities ----
-    const amrex::Real lapphi        = 0.5 * r2;           // grad^2 phi
-    const amrex::Real lapne         = 4.0 / alpha;        // grad^2 n_e
-    const amrex::Real lapni         = 2.0 / alpha;        // grad^2 n_i
+    const amrex::Real lapphi = 0.5 * r2;                  // grad^2 phi
+    const amrex::Real lapne = 4.0 / alpha;                // grad^2 n_e
+    const amrex::Real lapni = 2.0 / alpha;                // grad^2 n_i
     const amrex::Real gradne_dot_gp = r4 / (4.0 * alpha); // grad n_e . grad phi
     const amrex::Real gradni_dot_gp = r4 / (8.0 * alpha); // grad n_i . grad phi
 
     // ---- Electron continuity (transport only) ----
     //   S_e = -mu_e(grad n_e . grad phi + n_e grad^2 phi) - De grad^2 n_e
     rxnsrc(i, j, k, E_ID) -=
-        mue * (gradne_dot_gp + ne * lapphi)   // div(mu_e n_e E)
-        + De * lapne;                         // -De grad^2 n_e
+        mue * (gradne_dot_gp + ne * lapphi) // div(mu_e n_e E)
+        + De * lapne;                       // -De grad^2 n_e
 
     // ---- Ion continuity (transport only) ----
     //   S_i = -mu_i(grad n_i . grad phi + n_i grad^2 phi) - Di grad^2 n_i
     rxnsrc(i, j, k, HEp_ID) -=
-        mui * (gradni_dot_gp + ni * lapphi)   // div(mu_i n_i E)
-        + Di * lapni;                         // -Di grad^2 n_i
+        mui * (gradni_dot_gp + ni * lapphi) // div(mu_i n_i E)
+        + Di * lapni;                       // -Di grad^2 n_i
 
     // ---- Electron energy: advection + diffusion + Joule (NO reaction,
     //      NO elastic loss -- chemistry disabled) ----
     const amrex::Real term1 =
-        -5.0 / 3.0 *
-        (mue * (gradne_dot_gp + ne * lapphi) + De * lapne);
+        -5.0 / 3.0 * (mue * (gradne_dot_gp + ne * lapphi) + De * lapne);
 
-    const amrex::Real E_mag_sq     = r6 / 64.0;      // |grad phi|^2
+    const amrex::Real E_mag_sq = r6 / 64.0;          // |grad phi|^2
     const amrex::Real gradne_dot_E = -gradne_dot_gp; // grad n_e . E
     const amrex::Real term2 =
         -ECHARGE * (mue * ne * E_mag_sq - De * gradne_dot_E);
@@ -162,7 +161,8 @@ AMREX_GPU_DEVICE AMREX_INLINE void add_user_react_sources(
     const amrex::Real nu = 10000.0;
     const amrex::Real term3 =
         4.0 * Rrate +
-        3.0 / 2.0 * ne * K_B * (Te_solved - Tg) * nu * (2.0 * ME / (4.0 * M_AMU));
+        3.0 / 2.0 * ne * K_B * (Te_solved - Tg) * nu * (2.0 * ME / (4.0 *
+M_AMU));
 
     rxnsrc(i, j, k, EEN_ID) += term1 + term2 + term3;
 }
