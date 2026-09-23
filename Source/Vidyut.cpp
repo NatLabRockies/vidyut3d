@@ -377,8 +377,8 @@ void Vidyut::ErrorEst(int lev, TagBoxArray& tags, Real time, int ngrow)
                     auto statefab = sb_arrays[nbx];
                     auto tagfab = tags_arrays[nbx];
                     cutcell_based_refinement(
-                        i, j, k, tagfab, statefab, CMASK_ID, vfrac_lo,
-                        vfrac_hi, tagval);
+                        i, j, k, tagfab, statefab, CMASK_ID, vfrac_lo, vfrac_hi,
+                        tagval);
                 });
         }
     }
@@ -534,15 +534,16 @@ void Vidyut::ReadParameters()
 #endif
         pp.query("using_ib", using_ib);
         pp.query("ib_identity_rows", ib_identity_rows);
+        pp.query("ib_cf_clearance_warn", ib_cf_clearance_warn);
         if (ib_identity_rows < 0)
         {
             ib_identity_rows = (max_level > 0) ? 1 : 0;
         }
         if (using_ib)
         {
-            amrex::Print()
-                << "IB solid cells: "
-                << (ib_identity_rows ? "own row" : "overset mask") << "\n";
+            amrex::Print() << "IB solid cells: "
+                           << (ib_identity_rows ? "own row" : "overset mask")
+                           << "\n";
         }
 
         if (using_ib)
@@ -776,6 +777,128 @@ void Vidyut::set_solver_mask(
                     smask_arr(i, j, k) = int(sb_arr(i, j, k, CMASK_ID));
                 });
         }
+    }
+}
+
+// A coarse-fine interface that runs within a cell or two of an immersed wall
+// makes the composite solve lose accuracy there, and the resulting error does
+// not shrink under refinement - it simply stops converging, which is easy to
+// miss because the answer still looks plausible. Measure the smallest gap and
+// say so. The remedy is a larger amr.n_error_buf (or a tagging rule that keeps
+// the refined region clear of the wall).
+// A coarse-fine interface that runs within a cell or two of an immersed wall
+// makes the composite solve lose accuracy there, and the error then stops
+// converging under refinement - easy to miss, because the answer still looks
+// plausible. Measure the smallest gap and say so.
+//
+// The interface is found from the COARSE side. Looking from the fine side does
+// not work: solid cells are never tagged for refinement, so a fine level always
+// stops at the wall and its edge there is indistinguishable from a real
+// coarse-fine interface. On the coarse level a cell that is uncovered, fluid,
+// and next to a covered cell is unambiguously on a coarse-fine interface.
+void Vidyut::check_ib_cf_clearance() const
+{
+    if (!using_ib || finest_level < 1 || ib_cf_clearance_warn <= 0) return;
+
+    const int RAD = amrex::max(6, ib_cf_clearance_warn + 2);
+    int worst = RAD + 1; // sentinel: no wall found within RAD
+
+    for (int lev = 0; lev < finest_level; lev++)
+    {
+        // 1 where this level owns the cell, 0 where the finer level covers it
+        iMultiFab fine0 = makeFineMask(
+            grids[lev], dmap[lev], grids[lev + 1], refRatio(lev), 1, 0);
+        iMultiFab fm(grids[lev], dmap[lev], 1, 1);
+        fm.setVal(1, 0, 1, 1);
+        iMultiFab::Copy(fm, fine0, 0, 0, 1, 0);
+        fm.FillBoundary(geom[lev].periodicity());
+
+        // cell mask with ghosts; unfilled ghosts read as fluid so a missing
+        // neighbour can never manufacture a warning
+        MultiFab cm(grids[lev], dmap[lev], 1, RAD);
+        cm.setVal(1.0, RAD);
+        amrex::MultiFab::Copy(cm, phi_new[lev], CMASK_ID, 0, 1, 0);
+        cm.FillBoundary(geom[lev].periodicity());
+
+        const Box& domain = geom[lev].Domain();
+        const int* dlo_p = domain.loVect();
+        const int* dhi_p = domain.hiVect();
+        GpuArray<int, AMREX_SPACEDIM> dlo = {
+            AMREX_D_DECL(dlo_p[0], dlo_p[1], dlo_p[2])};
+        GpuArray<int, AMREX_SPACEDIM> dhi = {
+            AMREX_D_DECL(dhi_p[0], dhi_p[1], dhi_p[2])};
+        const int rad = RAD;
+
+        amrex::Real lev_worst_r = amrex::ReduceMin(
+            cm, fm, 0,
+            [=] AMREX_GPU_HOST_DEVICE(
+                Box const& bx, Array4<Real const> const& cmarr,
+                Array4<int const> const& fmarr) -> amrex::Real {
+                amrex::Real m = amrex::Real(rad + 1);
+                amrex::Loop(bx, [=, &m](int i, int j, int k) noexcept {
+                    if (cmarr(i, j, k) < 1.0) return; // fluid only
+                    if (fmarr(i, j, k) == 0) return;  // must be uncovered
+                    IntVect iv{AMREX_D_DECL(i, j, k)};
+                    bool oncf = false;
+                    for (int d = 0; d < AMREX_SPACEDIM; d++)
+                    {
+                        for (int sg = -1; sg <= 1; sg += 2)
+                        {
+                            IntVect nb = iv;
+                            nb[d] += sg;
+                            if (nb[d] < dlo[d] || nb[d] > dhi[d]) continue;
+                            if (fmarr(nb) == 0) oncf = true; // covered by fine
+                        }
+                    }
+                    if (!oncf) return;
+                    const int rj = (AMREX_SPACEDIM >= 2) ? 1 : 0;
+                    const int rk = (AMREX_SPACEDIM == 3) ? 1 : 0;
+                    for (int r = 1; r <= rad; r++)
+                    {
+                        bool hit = false;
+                        for (int kk = -r * rk; kk <= r * rk; kk++)
+                            for (int jj = -r * rj; jj <= r * rj; jj++)
+                                for (int ii = -r; ii <= r; ii++)
+                                {
+                                    int cheb = amrex::max(
+                                        amrex::Math::abs(ii),
+                                        amrex::max(
+                                            amrex::Math::abs(jj),
+                                            amrex::Math::abs(kk)));
+                                    if (cheb != r) continue;
+                                    if (cmarr(i + ii, j + jj, k + kk) < 1.0)
+                                        hit = true;
+                                }
+                        if (hit)
+                        {
+                            m = amrex::min(m, amrex::Real(r));
+                            break;
+                        }
+                    }
+                });
+                return m;
+            });
+        worst = amrex::min(worst, int(lev_worst_r + 0.5));
+    }
+
+    ParallelDescriptor::ReduceIntMin(worst);
+
+    if (worst < ib_cf_clearance_warn)
+    {
+        amrex::Print()
+            << "\n*** WARNING: a coarse-fine interface runs " << worst
+            << " coarse cell(s) from the immersed boundary (want >= "
+            << ib_cf_clearance_warn << ").\n"
+            << "*** The composite solve loses accuracy there and the error\n"
+            << "*** will stop converging under refinement. Raise\n"
+            << "*** amr.n_error_buf, or tag so the refined region clears the "
+               "wall.\n\n";
+    } else if (evolve_verbose)
+    {
+        amrex::Print() << "IB coarse-fine clearance: nearest wall is "
+                       << (worst > RAD ? std::string("> ") + std::to_string(RAD)
+                                       : std::to_string(worst))
+                       << " coarse cell(s) from an interface, ok\n";
     }
 }
 

@@ -349,6 +349,10 @@ public:
         MultiFab& Sborder,
         int numcomps);
 
+    // Report the smallest gap, in coarse cells, between any coarse-fine
+    // interface and the immersed boundary, and warn when it is too small.
+    void check_ib_cf_clearance() const;
+
     void correct_efields_ib(
         Vector<MultiFab>& Sborder,
         Vector<Array<MultiFab, AMREX_SPACEDIM>>& efield_fc,
@@ -406,6 +410,12 @@ public:
     //      runs, and rows are used as soon as there is a level to refine.
     int ib_identity_rows = -1;
 
+    // Warn when an AMR coarse-fine interface is closer to an immersed wall
+    // than this many coarse cells. Measured on the MMS cases: a gap of 1 cell
+    // costs about 20x in the max norm and stops the error converging, a gap of
+    // 2 reproduces the uniform grid. See check_ib_cf_clearance.
+    int ib_cf_clearance_warn = 2;
+
     int using_LFA = 0;
 
     // Monitor file options
@@ -449,7 +459,9 @@ private:
     // Called after a level is created or remade by regridding, where the
     // state has just been filled by interpolation from the coarse level.
     void rebuild_level_geometry(
-        int lev, const amrex::BoxArray& ba, const amrex::DistributionMapping& dm);
+        int lev,
+        const amrex::BoxArray& ba,
+        const amrex::DistributionMapping& dm);
 
     // set covered coarse cells to be the average of overlying fine cells
     void AverageDown();
