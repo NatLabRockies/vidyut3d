@@ -100,12 +100,11 @@ void initdomaindata_eb(
     ProbParm* prob_parm)
 {
 
-    /*phi(i, j, k, CMASK_ID) = vfrac(i, j, k);
-    if (vfrac(i, j, k) < 0.5)
-    {
-        phi(i, j, k, CMASK_ID) = 0.0;
-    }*/
-    phi(i,j,k,CMASK_ID) = (vfrac(i,j,k) > 1.0 - 1e-8) ? 1.0 : 0.0;
+    // Carry the volume fraction itself, as the Laplace case does. The solver
+    // reads int(cellmask), so which cells it solves is unchanged, but the cut
+    // cells are now distinguishable from the solid and can be tagged for
+    // refinement.
+    phi(i, j, k, CMASK_ID) = vfrac(i, j, k);
     phi(i, j, k, CPX_ID) = cp(i, j, k, 0);
     phi(i, j, k, CPY_ID) = cp(i, j, k, 1);
 #if (AMREX_SPACEDIM == 3)

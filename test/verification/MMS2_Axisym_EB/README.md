@@ -60,22 +60,22 @@ $L_2$ errors and convergence rates, method 4 with the offset:
 
 ### Adaptive mesh refinement
 
-The mask of this case is binary, `cellmask = (vfrac > 1 - 1e-8) ? 1 : 0`, so it
-has no partially filled cells and `vidyut.refine_cutcells` finds nothing to tag.
-Refine on the gradient of the mask instead, which marks the cells next to the
-wall:
+`cellmask` carries the volume fraction, so the cut cells can be tagged directly
+and the refined band follows the wall:
 
 ```
 mpirun -np 4 ./*.ex inputs2d amr.max_level=1 amr.n_error_buf=8 amr.blocking_factor=8 \
-    vidyut.tagged_vars=cellmask vidyut.cellmask_refine=1e20 vidyut.cellmask_refinegrad=0.1 \
+    vidyut.refine_cutcells=1 \
     vidyut.use_hypre=1 vidyut.linsolve_max_coarsening_level=0
 ```
 
-**This does not run to completion yet.** The levels are built and the potential
-solve converges on the hierarchy (21 hypre iterations, relative residual
+**This does not run to completion yet.** The hierarchy is built and the
+potential solve converges on it (21 `hypre` iterations, relative residual
 $6\times10^{-13}$), but the implicit species solve does not: it stops at a
 relative residual of $6\times10^{-5}$ after 1000 iterations and aborts in
-`ScalarSolve.cpp`. The masked cells cannot be coarsened and the limit is taken
-from the coarsest level, which the potential solve survives with `hypre` as the
-bottom solver and the species solve does not. The uniform-grid results above are
-unaffected.
+`ScalarSolve.cpp`. The masked cells cannot be coarsened and the coarsening limit
+is taken from the coarsest level, which the potential solve survives with
+`hypre` as the bottom solver and the species solve does not. Refining on the
+gradient of the mask instead of the cut cells fails in the same place, so it is
+the species solve and not the refinement criterion. The uniform-grid results
+above are unaffected.
