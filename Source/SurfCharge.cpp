@@ -100,6 +100,13 @@ void Vidyut::update_surf_charge(
     int eidx = E_IDX;
     for (int ilev = 0; ilev <= finest_level; ilev++)
     {
+        // advance from the old time level: this function is called once per
+        // timestep corrector and phi_new holds the averaged state after the
+        // first iteration. The face loops below then accumulate, so a cell
+        // with more than one dielectric face gets all contributions
+        amrex::MultiFab::Copy(
+            phi_new[ilev], phi_old[ilev], SRFCH_ID, SRFCH_ID, 1, 0);
+
         // set boundary conditions
         for (MFIter mfi(phi_new[ilev], TilingIfNotGPU()); mfi.isValid(); ++mfi)
         {

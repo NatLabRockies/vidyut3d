@@ -1,4 +1,4 @@
-VIDYUT_DIR = ../../../../
+VIDYUT_DIR ?= ../../../
 
 PRECISION  = DOUBLE
 PROFILE    = FALSE
