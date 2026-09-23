@@ -204,6 +204,9 @@ public:
     // not move, so this gives a refinement pattern that is fixed for the whole
     // run (static refinement). Widen the refined band with amr.n_error_buf.
     int refine_cutcells = 0;
+    // refine_cutcells is only meaningful if the case stores a fractional
+    // CMASK. Checked once, on the first ErrorEst call for level 0.
+    int cutcell_mask_checked = 0;
     // Static refinement of a user-specified box, in physical coordinates.
     int refine_box = 0;
     amrex::Vector<amrex::Real> refine_box_lo;
