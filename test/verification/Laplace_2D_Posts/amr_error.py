@@ -36,6 +36,16 @@ def analyse(pf, half=None):
     maxlev = ds.index.max_level
     e2 = vol = linf = 0.0
     ncell = 0
+    # Normalising scale, max|phi_exact| over the domain, taken ANALYTICALLY
+    # rather than as a max over cell centres. The discrete max is grid
+    # dependent - the outermost cell centre of a coarse base grid sits further
+    # from x = +-3 than that of a fine one, giving 8.72 against 8.97 here - and
+    # normalising each run by its own value injects a ~3% difference between
+    # runs that has nothing to do with their accuracy.
+    dlo = ds.domain_left_edge.d[:2]
+    dhi = ds.domain_right_edge.d[:2]
+    scale = max(abs(exact(dhi[0], 0.0)), abs(exact(0.0, dhi[1])),
+                abs(exact(dlo[0], 0.0)), abs(exact(0.0, dlo[1])))
     for g in ds.index.grids:
         cm = np.array(g["boxlib", "cellmask"])[:, :, 0]
         phi = np.array(g["boxlib", "Potential"])[:, :, 0]
@@ -47,17 +57,23 @@ def analyse(pf, half=None):
             le[1] + (np.arange(ny) + 0.5) * dd[1],
             indexing="ij",
         )
-        sel = (cm > 1.0 - 1e-10) & child
+        fluid = (cm > 1.0 - 1e-10) & child
+        ex = exact(X, Y)
+        sel = fluid
         if half is not None:
-            sel &= (np.abs(X) <= half) & (np.abs(Y) <= half)
+            sel = fluid & (np.abs(X) <= half) & (np.abs(Y) <= half)
         if not sel.any():
             continue
-        err = np.abs(phi - exact(X, Y))[sel]
+        err = np.abs(phi - ex)[sel]
         cv = float(dd[0] * dd[1])
         e2 += float((err**2).sum()) * cv
         vol += sel.sum() * cv
         linf = max(linf, float(err.max()))
         ncell += int(sel.sum())
+    # normalised by max|phi_exact| over the fluid, as elsewhere in the paper
+    if scale > 0:
+        e2 /= scale * scale
+        linf /= scale
     return maxlev, (np.sqrt(e2 / vol) if vol else float("nan")), linf, ncell
 
 

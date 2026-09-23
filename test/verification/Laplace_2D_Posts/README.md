@@ -63,19 +63,26 @@ Read the table in **pairs at equal finest spacing**.
 Errors inside the refined patch (`|x|,|y| <= 1`), and cost as cell updates
 summed over levels and substeps — not `n^2`, because a refined run subcycles:
 
-| finest | run | cell updates | sec | L2 | Linf | saving |
-|---|---|---|---|---|---|---|
-| 128 | uni128 | 163840 | 0.2 | 5.0939e-03 | 2.8548e-02 | |
-|     | amrL1  |  92160 | 0.1 | 5.1082e-03 | 2.8548e-02 | 1.8x |
-| 256 | uni256 | 655360 | 1.3 | 1.6011e-03 | 1.6981e-02 | |
-|     | amrL2  | 199680 | 0.2 | 1.6166e-03 | 1.6981e-02 | 3.3x |
-| 512 | uni512 |2621440 |14.1 | 5.2109e-04 | 5.3904e-03 | |
-|     | amrL3  | 481280 | 0.4 | 5.2909e-04 | 5.3798e-03 | 5.4x |
+| finest | run | cell updates | L2 (patch) | Linf (domain) | saving |
+|---|---|---|---|---|---|
+| 128 | uni128 |  163840 | 5.6599e-04 | 3.1720e-03 | |
+|     | amrL1  |   92160 | 5.6757e-04 | 3.1720e-03 | 1.8x |
+| 256 | uni256 |  655360 | 1.7790e-04 | 1.8868e-03 | |
+|     | amrL2  |  199680 | 1.7962e-04 | 1.8868e-03 | 3.3x |
+| 512 | uni512 | 2621440 | 5.7898e-05 | 5.9893e-04 | |
+|     | amrL3  |  481280 | 5.8788e-05 | 5.9775e-04 | 5.4x |
+
+Errors are normalized by `max|phi_exact|` over the domain, taken **analytically**
+(9 here) rather than as a max over cell centres. The discrete max is grid
+dependent - the outermost cell centre of the base grid sits further from
+`x = +-3` than that of a fine grid, giving 8.72 against 8.97 - and normalizing
+each run by its own value injects a ~3% difference between runs that has nothing
+to do with their accuracy.
 
 Refinement reproduces the uniform grid it matches in spacing to **0.3%, 1.0%
-and 1.5%** in L2, and the max norm to four digits, for **1.8x, 3.3x and 5.4x**
-fewer cell updates (35x less wall time at the finest rung, the solve being
-superlinear). No coarse-fine clearance warnings at any rung, so the hierarchy
+and 1.5%** in L2, and the max norm to three or four significant figures, for
+**1.8x, 3.3x and 5.4x** fewer cell updates (35x less wall time at the finest
+rung, the solve being superlinear). No coarse-fine clearance warnings at any rung, so the hierarchy
 keeps its distance from the wall throughout — see `vidyut.ib_cf_clearance_warn`.
 
 The worst error sits at the same physical point in both runs, `(+0.709,+0.639)`,

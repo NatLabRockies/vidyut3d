@@ -105,6 +105,8 @@ def main():
 
     a = ax[0, 0]
     cf = a.contourf(X, Y, phi, levels=30, cmap="viridis")
+    for c in cf.collections:
+        c.set_rasterized(True)
     a.contour(X, Y, phi, levels=14, colors="w", linewidths=0.4, alpha=0.6)
     fig.colorbar(cf, ax=a, shrink=0.85, label=r"$\phi$")
     draw_posts(a)
@@ -113,7 +115,8 @@ def main():
     vmax = np.nanmax(err)
     vmin = vmax / 3.0e3  # show structure instead of saturating
     a = ax[0, 1]
-    m = a.pcolormesh(X, Y, err, cmap="magma", norm=LogNorm(vmin, vmax), shading="auto")
+    m = a.pcolormesh(X, Y, err, cmap="magma", norm=LogNorm(vmin, vmax),
+                     shading="auto", rasterized=True)
     fig.colorbar(m, ax=a, shrink=0.85, label=r"$|\phi-\phi_{\rm exact}|$")
     draw_posts(a)
     a.add_patch(Rectangle((-ZOOM, -ZOOM), 2 * ZOOM, 2 * ZOOM,
@@ -128,7 +131,7 @@ def main():
         (ax[1, 1], erra, Xa, Ya, f"(d) error zoom, refined {amr}", dsa),
     ):
         m = a.pcolormesh(Xc, Yc, E, cmap="magma", norm=LogNorm(vmin, vmax),
-                         shading="auto")
+                         shading="auto", rasterized=True)
         fig.colorbar(m, ax=a, shrink=0.85, label=r"$|\phi-\phi_{\rm exact}|$")
         if ds is not None:
             levels_on(a, ds)
