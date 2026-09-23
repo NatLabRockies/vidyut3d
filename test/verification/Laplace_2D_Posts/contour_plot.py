@@ -110,7 +110,7 @@ def main():
     a.contour(X, Y, phi, levels=14, colors="w", linewidths=0.4, alpha=0.6)
     fig.colorbar(cf, ax=a, shrink=0.85, label=r"$\phi$")
     draw_posts(a)
-    a.set_title(r"(a) potential, $\phi_{\rm exact}=x^2-y^2$ (harmonic)")
+    a.set_title(r"(a) $\phi$")
 
     vmax = np.nanmax(err)
     vmin = vmax / 3.0e3  # show structure instead of saturating
@@ -121,14 +121,14 @@ def main():
     draw_posts(a)
     a.add_patch(Rectangle((-ZOOM, -ZOOM), 2 * ZOOM, 2 * ZOOM,
                           fill=False, ec="w", lw=1.0, ls="--", zorder=7))
-    a.set_title(
-        f"(b) error, uniform {uni[3:]}: the posts are the only source,\n"
-        "spread by the elliptic solve (dark curves are sign changes)"
-    )
+    a.set_title(rf"(b) $|\phi-\phi^*|$, uniform $N_x={uni[3:]}$")
 
+    nlev = dsa.index.max_level
     for a, E, Xc, Yc, ttl, ds in (
-        (ax[1, 0], errz, Xz, Yz, f"(c) error zoom, uniform {uni[3:]}", None),
-        (ax[1, 1], erra, Xa, Ya, f"(d) error zoom, refined {amr}", dsa),
+        (ax[1, 0], errz, Xz, Yz,
+         rf"(c) near the array, uniform $N_x={uni[3:]}$", None),
+        (ax[1, 1], erra, Xa, Ya,
+         rf"(d) near the array, base $64$ + {nlev} levels", dsa),
     ):
         m = a.pcolormesh(Xc, Yc, E, cmap="magma", norm=LogNorm(vmin, vmax),
                          shading="auto", rasterized=True)
@@ -136,8 +136,7 @@ def main():
         if ds is not None:
             levels_on(a, ds)
         draw_posts(a)
-        a.set_title(ttl + ("\nlevel patches drawn" if ds is not None else
-                           "\ngap = 0.06, unresolved on the base grid"))
+        a.set_title(ttl)
         a.set_xlim(-ZOOM, ZOOM)
         a.set_ylim(-ZOOM, ZOOM)
 
