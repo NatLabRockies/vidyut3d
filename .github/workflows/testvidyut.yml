@@ -54,6 +54,16 @@ jobs:
         key: ccache-${{github.workflow}}-${{github.job}}-git-${{github.sha}}
         restore-keys: |
              ccache-${{github.workflow}}-${{github.job}}-git-
+    - name: Build Unit Tests
+      working-directory: ./test/unit/
+      run: |
+        ccache -z
+        make -j 2 USE_CCACHE=TRUE COMP=gnu
+        ccache -s
+    - name: Run Unit Tests
+      working-directory: ./test/unit/
+      run: |
+        ./unittests3d.gnu.ex
     - name: Build Regression
       working-directory: ./test/verification/
       run: |
