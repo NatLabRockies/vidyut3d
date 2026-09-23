@@ -344,6 +344,46 @@ void Vidyut::ErrorEst(int lev, TagBoxArray& tags, Real time, int ngrow)
     MultiFab Sborder(grids[lev], dmap[lev], state.nComp(), 1);
     FillPatch(lev, time, Sborder, 0, Sborder.nComp());
 
+    // cutcell_based_refinement tags a cell only when its CMASK lies strictly
+    // between cutcell_vfrac_lo and cutcell_vfrac_hi. A case that stores a 0/1
+    // mask instead of the volume fraction never produces such a value, so the
+    // tagging returns nothing, the hierarchy stays unrefined, and the run
+    // looks like a successful AMR run that simply did not help. Check once, on
+    // the coarsest level, and stop rather than hand back a mesh nobody asked
+    // for.
+    if (refine_cutcells && lev == 0 && !cutcell_mask_checked)
+    {
+        cutcell_mask_checked = 1;
+        const amrex::Real vlo = cutcell_vfrac_lo;
+        const amrex::Real vhi = cutcell_vfrac_hi;
+        amrex::Long nfrac = amrex::ReduceSum(
+            Sborder, 0,
+            [=] AMREX_GPU_HOST_DEVICE(
+                amrex::Box const& bx,
+                amrex::Array4<amrex::Real const> const& sb) -> amrex::Long {
+                amrex::Long n = 0;
+                amrex::Loop(bx, [=, &n](int i, int j, int k) noexcept {
+                    const amrex::Real c = sb(i, j, k, CMASK_ID);
+                    if (c > vlo && c < vhi) n++;
+                });
+                return n;
+            });
+        amrex::ParallelDescriptor::ReduceLongSum(nfrac);
+        if (nfrac == 0)
+        {
+            amrex::Abort(
+                "vidyut.refine_cutcells=1 but no cell on level 0 has "
+                "vidyut.cutcell_vfrac_lo < CMASK < vidyut.cutcell_vfrac_hi, so "
+                "it would tag nothing and the mesh would stay unrefined.\n"
+                "  Usually this means the case writes a 0/1 CMASK rather than "
+                "the volume fraction. Set phi(i,j,k,CMASK_ID) = vfrac(i,j,k) "
+                "in initdomaindata_eb: every other consumer tests int(cmask) "
+                "or cmask < 1, so the two agree cell for cell.\n"
+                "  If the geometry really has no cut cells, set "
+                "vidyut.refine_cutcells=0.\n");
+        }
+    }
+
 #ifdef _OPENMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif

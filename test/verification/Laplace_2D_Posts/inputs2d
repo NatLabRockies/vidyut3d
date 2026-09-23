@@ -1,0 +1,84 @@
+max_step  = 10
+stop_time = 2e-8
+
+# PROBLEM SIZE & GEOMETRY
+# The box is in the fluid here (the posts are the only immersed bodies), so it
+# is a plain grid-aligned Dirichlet boundary carrying the exact solution.
+geometry.is_periodic =  0 0
+geometry.coord_sys   =  0       # 0 => cart, 1 => RZ (axisymmetric)
+geometry.prob_lo     =  -3     -3
+geometry.prob_hi     =   3      3
+amr.n_cell           = 128 128
+
+# EB: a 3x3 array of solid posts separated by NARROW GAPS.
+#
+# gap = post_pitch - 2*post_r = 0.06. On the base grid of the refined ladder
+# (64 cells over 6 units, dx = 0.094) that is 0.64 of a cell, so the base grid
+# cannot see the gap at all; it takes 1.3 cells at 128, 2.6 at 256 and 5.1 at
+# 512. The posts span [-0.72,0.72]^2, about 6% of the domain area.
+#
+# The exact solution phi = x^2 - y^2 is harmonic AND has vanishing fourth
+# derivatives, so the interior stencil reproduces it exactly on any grid. All
+# of the error comes from the immersed boundary, i.e. from the gaps, which is
+# what makes this a fair test of refining locally.
+eb2.geom_type   = posts
+eb2.npost       = 3
+eb2.post_r      = 0.22
+eb2.post_pitch  = 0.50
+eb2.shiftx      = 0.031
+eb2.shifty      = -0.017
+
+# degenerate-cell safeguards: a gap this narrow puts two wall faces in one cell
+prob.corner_fallback  = 1
+prob.perface_fallback = 1
+prob.ray_dirichlet    = 1
+
+# VERBOSITY
+amr.v              = 1
+
+# REFINEMENT
+amr.max_level       = 0
+amr.blocking_factor = 16
+amr.max_grid_size   = 32
+amr.regrid_int      = 1
+
+# TIME STEP CONTROL: a steady Laplace solve, stepped only to drive the solver
+vidyut.dt             = 1e-13
+vidyut.num_timestep_correctors = 1
+vidyut.hyp_order = 5
+vidyut.user_defined_potential = 1
+vidyut.user_defined_species = 1
+vidyut.user_defined_vel = 1
+vidyut.using_ib=1
+
+prob.inner_radius=0.1
+prob.outer_radius=0.2
+prob.inner_voltage=10.0
+prob.outer_voltage=20.0
+prob.a_inner_dir = 1.0
+prob.b_inner_neumann = 0.0
+prob.a_outer_dir = 1.0
+prob.b_outer_neumann = 0.0
+
+#0 - periodic, 1 - Dirichlet, 2 - Homogenous Neumann, 3 - Inhomogenous Neumann, 4 - Robin
+vidyut.pot_bc_lo = 1 1
+vidyut.pot_bc_hi = 1 1
+
+vidyut.eden_bc_lo = 2 2
+vidyut.eden_bc_hi = 2 2
+vidyut.eenrg_bc_lo = 2 2
+vidyut.eenrg_bc_hi = 2 2
+vidyut.ion_bc_lo = 2 2
+vidyut.ion_bc_hi = 2 2
+vidyut.neutral_bc_lo = 2 2
+vidyut.neutral_bc_hi = 2 2
+
+# PLOTFILES
+amr.plot_file  = plt
+amr.plot_int   = 1000
+amr.chk_file = chk
+amr.chk_int  = 1000
+
+vidyut.linsolve_reltol = 1.0e-12
+vidyut.linsolve_abstol = 1.0e-14
+vidyut.linsolve_maxiter = 1000
