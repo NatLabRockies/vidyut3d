@@ -87,10 +87,16 @@ coefficient is zero, is given a diagonal so the row is not empty. They solve to
 zero and never reach the fluid, and with no mask the AMR machinery behaves
 normally.
 
-The option is off by default because it changes the linear system. It does not
-change the answer: on a uniform grid the two agree to a relative $10^{-10}$,
-which is solver noise. The table above was produced without it, and the paper's
-results are unaffected either way.
+The default is `vidyut.ib_identity_rows = -1`, which means *choose*: `Vidyut::ReadParameters`
+selects identity rows whenever `amr.max_level > 0` and the overset mask
+otherwise. So a single-level run gets the mask and an AMR run gets identity
+rows without either being asked for, and the run prints which one it used
+("IB solid cells: own row" or "overset mask"). Setting the option to 0 or 1
+overrides that choice.
+
+The two do not change the answer: on a uniform grid they agree to a relative
+$10^{-10}$, which is solver noise. The table above was produced with the mask,
+and the paper's results are unaffected either way.
 
 | | $\phi$ | $n_e$ | $n_i$ | $E_e$ |
 |---|---|---|---|---|

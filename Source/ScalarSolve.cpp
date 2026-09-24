@@ -943,10 +943,25 @@ void Vidyut::implicit_solve_scalar(
                     // way.
                     if (freeze_l == 1) return;
 
+                    // A solid cell under ib_identity_rows carries its own row
+                    // with a zero right-hand side, so every species there -
+                    // the electron density included - solves to exactly zero.
+                    // Backing Te out of such a cell divides zero by zero and
+                    // writes NaN into ETEMP_ID. Those NaNs do not reach the
+                    // fluid through the operator, but they do sit in the
+                    // state, reach plotfiles and checkpoints, and would be
+                    // picked up by the coarse-fine interpolation, which does
+                    // not read the mask. A masked cell carries no solution, so
+                    // leave its temperature alone. The density is tested
+                    // rather than the mask so that this holds for a case that
+                    // never writes CMASK, and it also catches the small
+                    // negative densities a decoupled row can leave behind.
+                    const amrex::Real ne_loc = sb_arr(i, j, k, eidx_l);
+                    if (!(ne_loc > 0.0)) return;
+
                     // production: back out Te from energy density
-                    phi_arr(i, j, k, ETEMP_ID) = twothird / K_B *
-                                                 phi_arr(i, j, k, EEN_ID) /
-                                                 sb_arr(i, j, k, eidx_l);
+                    phi_arr(i, j, k, ETEMP_ID) =
+                        twothird / K_B * phi_arr(i, j, k, EEN_ID) / ne_loc;
                     if (phi_arr(i, j, k, ETEMP_ID) < minetemp)
                     {
                         phi_arr(i, j, k, ETEMP_ID) = minetemp;
