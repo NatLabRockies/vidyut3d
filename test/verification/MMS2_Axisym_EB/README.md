@@ -69,8 +69,13 @@ mpirun -np 4 ./*.ex inputs2d amr.max_level=1 amr.n_error_buf=8 amr.blocking_fact
     vidyut.use_hypre=1 vidyut.linsolve_max_coarsening_level=0
 ```
 
-Add `vidyut.ib_identity_rows=1`. Without it the implicit species solve stalls;
-with it the case runs to completion, species solves taking 5 to 6 iterations.
+The command above already gets identity rows: the default is
+`vidyut.ib_identity_rows = -1`, which resolves to 1 whenever `amr.max_level > 0`
+(see below), and the run prints `IB solid cells: own row` to say so. Passing
+`vidyut.ib_identity_rows=1` explicitly is an override, not a requirement. What
+matters is that the overset-mask path must not be used here: with it the
+implicit species solve stalls, and with identity rows the case runs to
+completion, species solves taking 5 to 6 iterations.
 
 ### Why the extra option is needed
 

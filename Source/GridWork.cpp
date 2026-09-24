@@ -111,6 +111,108 @@ void Vidyut::rebuild_level_geometry(
                     });
             }
             amrex::Gpu::streamSynchronize();
+
+            // A cell that was solid and is now fluid has no usable value yet.
+            // The restore above deliberately skipped it, and
+            // init_level_with_eb cannot be relied on to have supplied one:
+            // writing solution components there is not part of the callback's
+            // contract and several cases, MMS2_Axisym_EB among them, write
+            // only the mask, the centroids and the normals. Left alone the
+            // cell would keep the coarse identity-row value, normally zero.
+            //
+            // Extend the solution into those cells instead, by repeatedly
+            // averaging over the face neighbours that already hold a usable
+            // value. Two sweeps reach a cell with no fluid neighbour at all;
+            // anything still unreached keeps what it had, which is no worse
+            // than before. This runs only on a regrid and only over cells that
+            // changed state, so it is cheap.
+            iMultiFab valid(ba, dm, 1, nghost);
+            {
+                auto const& ph = phi_new[lev].const_arrays();
+                auto const& sv = saved.const_arrays();
+                auto const& va = valid.arrays();
+                amrex::ParallelFor(
+                    valid, amrex::IntVect(nghost),
+                    [=] AMREX_GPU_DEVICE(
+                        int nbx, int i, int j, int k) noexcept {
+                        const int fluid_now =
+                            (int(ph[nbx](i, j, k, CMASK_ID)) == 1);
+                        const int fluid_before =
+                            (int(sv[nbx](i, j, k, CMASK_ID)) == 1);
+                        // usable = solid (never read), or fluid all along
+                        va[nbx](i, j, k) = (!fluid_now || fluid_before) ? 1 : 0;
+                    });
+                amrex::Gpu::streamSynchronize();
+            }
+
+            for (int sweep = 0; sweep < 4; sweep++)
+            {
+                phi_new[lev].FillBoundary(geom[lev].periodicity());
+                valid.FillBoundary(geom[lev].periodicity());
+                MultiFab phi_in(ba, dm, ncomp, nghost);
+                iMultiFab valid_in(ba, dm, 1, nghost);
+                MultiFab::Copy(phi_in, phi_new[lev], 0, 0, ncomp, nghost);
+                amrex::iMultiFab::Copy(valid_in, valid, 0, 0, 1, nghost);
+
+                auto const& pin = phi_in.const_arrays();
+                auto const& vin = valid_in.const_arrays();
+                auto const& pout = phi_new[lev].arrays();
+                auto const& vout = valid.arrays();
+                auto rr = comp_ranges();
+                amrex::Gpu::DeviceVector<CompRange> d_rr(rr.size());
+                amrex::Gpu::copyAsync(
+                    amrex::Gpu::hostToDevice, rr.begin(), rr.end(),
+                    d_rr.begin());
+                amrex::Gpu::streamSynchronize();
+                const CompRange* rp = d_rr.data();
+                const int nr = static_cast<int>(rr.size());
+
+                amrex::ParallelFor(
+                    valid, [=] AMREX_GPU_DEVICE(
+                               int nbx, int i, int j, int k) noexcept {
+                        if (vin[nbx](i, j, k) == 1) return;
+                        int cnt = 0;
+                        AMREX_D_TERM(
+                            cnt += (vin[nbx](i - 1, j, k) == 1) +
+                                   (vin[nbx](i + 1, j, k) == 1);
+                            , cnt += (vin[nbx](i, j - 1, k) == 1) +
+                                     (vin[nbx](i, j + 1, k) == 1);
+                            , cnt += (vin[nbx](i, j, k - 1) == 1) +
+                                     (vin[nbx](i, j, k + 1) == 1);)
+                        if (cnt == 0) return;
+                        for (int r = 0; r < nr; r++)
+                        {
+                            if (rp[r].is_geometry) continue;
+                            for (int n = rp[r].scomp;
+                                 n < rp[r].scomp + rp[r].ncomp; n++)
+                            {
+                                amrex::Real acc = 0.0;
+                                AMREX_D_TERM(
+                                    acc += (vin[nbx](i - 1, j, k) == 1)
+                                               ? pin[nbx](i - 1, j, k, n)
+                                               : 0.0;
+                                    acc += (vin[nbx](i + 1, j, k) == 1)
+                                               ? pin[nbx](i + 1, j, k, n)
+                                               : 0.0;
+                                    , acc += (vin[nbx](i, j - 1, k) == 1)
+                                                 ? pin[nbx](i, j - 1, k, n)
+                                                 : 0.0;
+                                    acc += (vin[nbx](i, j + 1, k) == 1)
+                                               ? pin[nbx](i, j + 1, k, n)
+                                               : 0.0;
+                                    , acc += (vin[nbx](i, j, k - 1) == 1)
+                                                 ? pin[nbx](i, j, k - 1, n)
+                                                 : 0.0;
+                                    acc += (vin[nbx](i, j, k + 1) == 1)
+                                               ? pin[nbx](i, j, k + 1, n)
+                                               : 0.0;)
+                                pout[nbx](i, j, k, n) = acc / cnt;
+                            }
+                        }
+                        vout[nbx](i, j, k) = 1;
+                    });
+                amrex::Gpu::streamSynchronize();
+            }
         }
     }
 #else
