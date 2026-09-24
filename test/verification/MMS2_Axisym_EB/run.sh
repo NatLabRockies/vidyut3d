@@ -29,7 +29,7 @@ do
     rm -rf plt* chk*
     if ! mpirun -np ${NP} ../*.ex ../inputs2d \
             amr.n_cell="${DIM}" "${DIM}" 1 > log.log 2>&1; then
-        echo "grid ${DIM} failed, see ${DIM}/log.log" >&2
+        echo "grid ${DIM} failed, see $(pwd)/log.log" >&2
         exit 1
     fi
 

@@ -51,8 +51,20 @@ def draw_posts(ax):
 def sample(d, box=None, maxcells=900):
     """Finest-available data on a uniform sampling, as (X, Y, phi, err, ds)."""
     ds = yt.load(sorted(glob.glob(f"{d}/plt*"))[-1])
-    ds.force_periodicity()  # smoothed_covering_grid needs ghosts at the box edge
-    lev = ds.index.max_level
+    # smoothed_covering_grid interpolates, so it reads two ghost cells beyond
+    # the region asked for - including along the degenerate third axis of a 2D
+    # dataset, where there is nothing to read. Make ONLY that axis periodic.
+    # x and y must stay non-periodic: they carry the exact solution as a
+    # Dirichlet boundary, and marking them periodic makes yt wrap the opposite
+    # edge and paint periodic artifacts along the box. The z wrap is harmless,
+    # the data having a single z plane.
+    ds._periodicity = (False, False, True)
+    # A full-domain view reaches the box edge, where those x/y ghosts do not
+    # exist. It is an overview, so take it from level 0 with covering_grid,
+    # which does not interpolate and needs no ghosts; for a uniform dataset
+    # level 0 is the whole resolution anyway. Only the zoomed panels, which sit
+    # well inside the domain, use the interpolating path at the finest level.
+    lev = ds.index.max_level if box is not None else 0
     dlo, dhi = ds.domain_left_edge.d[:2], ds.domain_right_edge.d[:2]
     dx = (dhi[0] - dlo[0]) / (ds.domain_dimensions[0] * 2**lev)
     lo = np.array([-box, -box]) if box else dlo.copy()
@@ -62,6 +74,13 @@ def sample(d, box=None, maxcells=900):
         lev = max(0, lev - int(np.ceil(np.log2(nx / maxcells))))
         dx = (dhi[0] - dlo[0]) / (ds.domain_dimensions[0] * 2**lev)
         nx = int(round((hi[0] - lo[0]) / dx))
+    # smoothed_covering_grid interpolates, so it reads one ghost cell beyond the
+    # region asked for. This domain is NOT periodic - the box carries the exact
+    # solution as a Dirichlet boundary - so asking for the full domain would
+    # make yt wrap the opposite edge and paint periodic artifacts along the
+    # boundary. Inset the request by one cell when a refined dataset is sampled
+    # right up to the box; a level-0 dataset needs no ghosts and a zoomed
+    # region is already interior.
     le = np.array([lo[0], lo[1], 0.0])
     cg = (ds.smoothed_covering_grid(lev, le, [nx, nx, 1]) if lev > 0
           else ds.covering_grid(0, le, [nx, nx, 1]))
