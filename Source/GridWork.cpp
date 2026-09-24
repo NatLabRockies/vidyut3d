@@ -43,7 +43,10 @@ Vector<Vidyut::CompRange> Vidyut::comp_ranges() const
 // filled by interpolation from the coarse level, which is meaningless for a
 // volume fraction and worse than meaningless for a normal vector.
 void Vidyut::rebuild_level_geometry(
-    int lev, const BoxArray& ba, const DistributionMapping& dm)
+    int lev,
+    const BoxArray& ba,
+    const DistributionMapping& dm,
+    bool preserve_solution)
 {
 #ifdef AMREX_USE_EB
     // EB rebuilds the index space from the level's own Geometry, so the
@@ -51,7 +54,34 @@ void Vidyut::rebuild_level_geometry(
     // coarse level. That sharpening is the whole point of refining here.
     if (h_prob_parm->enable_EB)
     {
+        // A case's initdomaindata_eb is free to write solution components as
+        // well as geometry, and several do: the Laplace cases set the
+        // densities and the electron temperature there. On a fresh level that
+        // is the intended initial condition. After a regrid it is not - the
+        // solution has just been interpolated from the coarse level or copied
+        // from the old grids, and overwriting it would silently discard the
+        // time-evolved state every time the hierarchy changed. Keep the
+        // non-geometry components across the call in that case.
+        MultiFab saved;
+        const int ncomp = phi_new[lev].nComp();
+        const int nghost = phi_new[lev].nGrow();
+        if (preserve_solution)
+        {
+            saved.define(ba, dm, ncomp, nghost);
+            MultiFab::Copy(saved, phi_new[lev], 0, 0, ncomp, nghost);
+        }
+
         init_level_with_eb(ba, dm, geom[lev], phi_new[lev], d_prob_parm);
+
+        if (preserve_solution)
+        {
+            for (const auto& r : comp_ranges())
+            {
+                if (r.is_geometry) continue;
+                MultiFab::Copy(
+                    phi_new[lev], saved, r.scomp, r.scomp, r.ncomp, nghost);
+            }
+        }
     }
 #else
     // Without EB there is no per-level geometry to rebuild from: the mask is
@@ -81,7 +111,7 @@ void Vidyut::MakeNewLevelFromCoarse(
 
     FillCoarsePatch(lev, time, phi_new[lev], 0, ncomp);
 
-    rebuild_level_geometry(lev, ba, dm);
+    rebuild_level_geometry(lev, ba, dm, /*preserve_solution=*/true);
 }
 
 // Remake an existing level using provided BoxArray and DistributionMapping and
@@ -105,7 +135,7 @@ void Vidyut::RemakeLevel(
     t_new[lev] = time;
     t_old[lev] = time - 1.e200;
 
-    rebuild_level_geometry(lev, ba, dm);
+    rebuild_level_geometry(lev, ba, dm, /*preserve_solution=*/true);
 }
 
 // Delete level data

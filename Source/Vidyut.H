@@ -475,7 +475,8 @@ private:
     void rebuild_level_geometry(
         int lev,
         const amrex::BoxArray& ba,
-        const amrex::DistributionMapping& dm);
+        const amrex::DistributionMapping& dm,
+        bool preserve_solution = false);
 
     // set covered coarse cells to be the average of overlying fine cells
     void AverageDown();

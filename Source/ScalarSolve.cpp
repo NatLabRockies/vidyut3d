@@ -931,27 +931,27 @@ void Vidyut::implicit_solve_scalar(
                     auto phi_arr = phi_arrays[nbx];
                     auto sb_arr = sborder_arrays[nbx];
 
-                    if (freeze_l == 1)
+                    // vidyut.freeze_etemp: EEN is a plain manufactured
+                    // scalar, so leave Te at whatever initdomaindata set
+                    // rather than backing it out, which would corrupt the
+                    // ETEMP-dependent transport coefficients the manufactured
+                    // source was derived with. Nothing else writes ETEMP_ID
+                    // after the solve, so skipping the back-out is exactly
+                    // "keep the initial value" - it must NOT assign a constant
+                    // of its own, since cases initialise Te to 0.5*eV, 3e4 or
+                    // 1.0 depending on the problem. EEN is left alone either
+                    // way.
+                    if (freeze_l == 1) return;
+
+                    // production: back out Te from energy density
+                    phi_arr(i, j, k, ETEMP_ID) = twothird / K_B *
+                                                 phi_arr(i, j, k, EEN_ID) /
+                                                 sb_arr(i, j, k, eidx_l);
+                    if (phi_arr(i, j, k, ETEMP_ID) < minetemp)
                     {
-                        // vidyut.freeze_etemp: EEN is a plain manufactured
-                        // scalar, so keep Te at the constant initdomaindata
-                        // set rather than backing it out, which would corrupt
-                        // the ETEMP-dependent transport coefficients the
-                        // manufactured source was derived with. EEN is left
-                        // alone.
-                        phi_arr(i, j, k, ETEMP_ID) = 1.0;
-                    } else
-                    {
-                        // production: back out Te from energy density
-                        phi_arr(i, j, k, ETEMP_ID) = twothird / K_B *
-                                                     phi_arr(i, j, k, EEN_ID) /
-                                                     sb_arr(i, j, k, eidx_l);
-                        if (phi_arr(i, j, k, ETEMP_ID) < minetemp)
-                        {
-                            phi_arr(i, j, k, ETEMP_ID) = minetemp;
-                            phi_arr(i, j, k, EEN_ID) =
-                                1.5 * K_B * phi_arr(i, j, k, eidx_l) * minetemp;
-                        }
+                        phi_arr(i, j, k, ETEMP_ID) = minetemp;
+                        phi_arr(i, j, k, EEN_ID) =
+                            1.5 * K_B * phi_arr(i, j, k, eidx_l) * minetemp;
                     }
                 });
         }

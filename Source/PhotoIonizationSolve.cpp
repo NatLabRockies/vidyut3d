@@ -403,6 +403,26 @@ void Vidyut::solve_photoionization(
             set_explicit_fluxes_at_ib(
                 ilev, ascalar, bscalar, rhs[ilev], acoeff[ilev], bcoeff[ilev],
                 Sborder[ilev], current_time, PHOTO_ION_SRC_ID, 0);
+
+            // Give every solid cell its own row, as PotentialSolve does.
+            // Without this the row is empty: get_photoion_acoeff leaves
+            // acoeff at zero, null_bcoeff_at_ib removes every solid face and
+            // set_explicit_fluxes_at_ib zeros the right-hand side, so with
+            // ib_identity_rows (the default) the solid cells are not covered
+            // by an overset mask either and the system is singular. The row
+            // solves to zero and never reaches the fluid.
+            if (ib_identity_rows)
+            {
+                auto const& sb = Sborder[ilev].const_arrays();
+                auto const& ac = acoeff[ilev].arrays();
+                amrex::ParallelFor(
+                    acoeff[ilev], [=] AMREX_GPU_DEVICE(
+                                      int nbx, int i, int j, int k) noexcept {
+                        if (int(sb[nbx](i, j, k, CMASK_ID)) != 1)
+                            ac[nbx](i, j, k) = 1.0;
+                    });
+                amrex::Gpu::streamSynchronize();
+            }
         }
 
         linsolve_ptr->setACoeffs(ilev, acoeff[ilev]);
