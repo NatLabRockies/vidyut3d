@@ -170,10 +170,39 @@ void Vidyut::rebuild_level_geometry(
             const CompRange* rp = d_rr.data();
             const int nr = static_cast<int>(rr.size());
 
+            // Sweep until nothing is left to fill rather than a fixed number
+            // of times: the width of a newly fluid region is not bounded by
+            // anything the caller controls, and a cell left unfilled would
+            // keep the coarse zero, which is the defect this exists to
+            // remove. The cap only stops an infinite loop if a region has no
+            // fluid neighbour at all, in which case there is nothing that
+            // could fill it.
+            constexpr int max_sweeps = 32;
             MultiFab phisnap(ba, dm, ncomp, ngf);
             iMultiFab stsnap(ba, dm, 1, ngf);
-            for (int sweep = 0; sweep < 4; sweep++)
+            for (int sweep = 0; sweep < max_sweeps; sweep++)
             {
+                amrex::Long nneed = amrex::ReduceSum(
+                    cellstate, 0,
+                    [=] AMREX_GPU_HOST_DEVICE(
+                        amrex::Box const& bx,
+                        amrex::Array4<int const> const& st) -> amrex::Long {
+                        amrex::Long n = 0;
+                        amrex::Loop(bx, [=, &n](int i, int j, int k) noexcept {
+                            if (st(i, j, k) == ST_NEEDS) n++;
+                        });
+                        return n;
+                    });
+                amrex::ParallelDescriptor::ReduceLongSum(nneed);
+                if (nneed == 0) break;
+                if (sweep == max_sweeps - 1)
+                {
+                    amrex::Print()
+                        << "WARNING: " << nneed
+                        << " cell(s) became fluid on level " << lev
+                        << " at this regrid and have no fluid neighbour to "
+                           "take a value from; they keep the value they had\n";
+                }
                 MultiFab::Copy(phisnap, phi_new[lev], 0, 0, ncomp, 0);
                 amrex::iMultiFab::Copy(stsnap, cellstate, 0, 0, 1, 0);
                 phisnap.FillBoundary(geom[lev].periodicity());

@@ -132,9 +132,24 @@ fewer cells. **Use `amr.n_error_buf >= 4`, preferably 8.**
 
 ### Linear solver
 
-The overset mask limits how far MLMG can coarsen, and AMReX takes that limit from
-level 0 only, so the native solver degrades badly once AMR levels are added. hypre
-fixes it. Same binary, 4 MPI ranks, first potential solve:
+**This section describes the overset-mask path, which is no longer what an AMR
+run uses.** `vidyut.ib_identity_rows` defaults to `-1`, which `ReadParameters`
+resolves to 1 whenever `amr.max_level > 0`, so a refined run gives each solid
+cell its own row and passes no overset mask to MLMG. The coarsening limit below
+does not apply to it, and the numbers in the table were measured with the mask.
+
+Two things follow, and the first is the one that matters. A solver change
+cannot fix the accuracy problem this case exists to show: the coarse-fine
+interpolation does not consult the mask, so a level boundary too close to the
+wall injects an O(phi) error whichever solver is used. The mitigation is
+geometric - keep every coarse-fine interface at least **two coarse cells** from
+the wall, which is what `amr.n_error_buf >= 4` (preferably 8) buys and what
+`Vidyut::check_ib_cf_clearance` checks at run time. Use
+`./run_amr_convergence.sh` to reproduce the tables above.
+
+The measurements below remain valid for the mask path, which a single-level run
+still takes and which an AMR run can be forced onto with
+`vidyut.ib_identity_rows=0`. Same binary, 4 MPI ranks, first potential solve:
 
 | case | hypre iters | hypre s | native iters | native s |
 |---|---|---|---|---|
