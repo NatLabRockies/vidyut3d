@@ -200,6 +200,20 @@ public:
     amrex::Gpu::ManagedVector<Real> refine_phigrad;
     amrex::Gpu::ManagedVector<int> refine_phi_comps;
 
+    // Refine on the immersed-boundary cut cells themselves. The geometry does
+    // not move, so this gives a refinement pattern that is fixed for the whole
+    // run (static refinement). Widen the refined band with amr.n_error_buf.
+    int refine_cutcells = 0;
+    // refine_cutcells is only meaningful if the case stores a fractional
+    // CMASK. Checked once, on the first ErrorEst call for level 0.
+    int cutcell_mask_checked = 0;
+    // Static refinement of a user-specified box, in physical coordinates.
+    int refine_box = 0;
+    amrex::Vector<amrex::Real> refine_box_lo;
+    amrex::Vector<amrex::Real> refine_box_hi;
+    amrex::Real cutcell_vfrac_lo = 0.0;
+    amrex::Real cutcell_vfrac_hi = 1.0;
+
     amrex::Vector<int> istep;     // which step?
     amrex::Vector<int> nsubsteps; // how many substeps on each level?
 
@@ -342,12 +356,16 @@ public:
         MultiFab& Sborder,
         int numcomps);
 
+    // Report the smallest gap, in coarse cells, between any coarse-fine
+    // interface and the immersed boundary, and warn when it is too small.
+    void check_ib_cf_clearance() const;
+
     void correct_efields_ib(
         Vector<MultiFab>& Sborder,
         Vector<Array<MultiFab, AMREX_SPACEDIM>>& efield_fc,
         Real time);
 
-#ifdef ENABLE_IB_FIELD_INTERPOLATION
+#if defined(ENABLE_IB_FIELD_INTERPOLATION) && defined(AMREX_USE_EB)
     void interpolate_fields_ib(
         Vector<MultiFab>& Sborder, int startcomp, int numcomp);
 #endif
@@ -382,7 +400,35 @@ public:
     // Electron species index
     int E_IDX = 0;
 
+    // Keep the electron temperature at its initial value instead of backing it
+    // out of the solved energy density. Needed by manufactured solutions where
+    // EEN is a plain scalar and a backed-out Te would corrupt the
+    // ETEMP-dependent transport coefficients the source term was derived with.
+    // Off by default, so an ordinary run backs Te out as it always has.
+    int freeze_etemp = 0;
+
     int using_ib = 0;
+
+    // How the solid cells are kept out of the linear solve. Two ways exist
+    // and both give the same fluid solution.
+    //
+    //   0  overset mask: the cells are masked out of the solve.
+    //   1  their own row: the cells stay unknowns, every face around them is
+    //      zeroed and the potential is given a diagonal, so they decouple and
+    //      solve to zero.
+    //  -1  (default) pick one. AMReX applies an overset mask inside the
+    //      operator but not in the coarse-fine machinery, so a composite
+    //      solve refluxes a correction into masked coarse cells that the
+    //      operator then zeroes and no iteration can remove. The mask is
+    //      therefore used on a single level, where none of that machinery
+    //      runs, and rows are used as soon as there is a level to refine.
+    int ib_identity_rows = -1;
+
+    // Warn when an AMR coarse-fine interface is closer to an immersed wall
+    // than this many coarse cells. Measured on the MMS cases: a gap of 1 cell
+    // costs about 20x in the max norm and stops the error converging, a gap of
+    // 2 reproduces the uniform grid. See check_ib_cf_clearance.
+    int ib_cf_clearance_warn = 2;
 
     int using_LFA = 0;
 
@@ -406,6 +452,31 @@ private:
 
     // read in some parameters from inputs file
     void ReadParameters();
+
+    // A contiguous run of state components that are all of the same kind.
+    // Geometry components (the IB cell mask, and with EB the boundary
+    // centroids and normals) describe where the boundary is, not what the
+    // solution is, so they are rebuilt per level from the geometry: they are
+    // never averaged down, and they are injected rather than interpolated
+    // when filling a finer level.
+    struct CompRange
+    {
+        int scomp;
+        int ncomp;
+        bool is_geometry;
+    };
+
+    // Split [0, NVAR) into runs of solution and geometry components.
+    amrex::Vector<CompRange> comp_ranges() const;
+
+    // Recompute the geometry components of a level from the geometry itself.
+    // Called after a level is created or remade by regridding, where the
+    // state has just been filled by interpolation from the coarse level.
+    void rebuild_level_geometry(
+        int lev,
+        const amrex::BoxArray& ba,
+        const amrex::DistributionMapping& dm,
+        bool preserve_solution = false);
 
     // set covered coarse cells to be the average of overlying fine cells
     void AverageDown();

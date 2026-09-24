@@ -1,4 +1,4 @@
-VIDYUT_DIR = /Users/hgopalan/Documents/Projects/Plasma/Codes/vidyut3d/
+VIDYUT_DIR ?= ../../../
 
 PRECISION  = DOUBLE
 PROFILE    = FALSE

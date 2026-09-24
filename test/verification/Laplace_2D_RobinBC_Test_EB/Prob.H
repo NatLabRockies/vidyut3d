@@ -112,18 +112,20 @@ void init_level_with_eb(
     };
 
 #if (AMREX_SPACEDIM == 2)
-    EB2::CylinderIF inner_cyl(inner_r, 20, 2, center, false);
-    EB2::CylinderIF outer_cyl(outer_r, 20, 2, center, true);
-    auto annulus_solid = EB2::makeUnion(inner_cyl, outer_cyl);
-    auto gshop = EB2::makeShop(annulus_solid);
-    EB2::Build(gshop, gm, 0, 0);
+    // In 2D a CylinderIF would need direction = 2, which trips
+    // AMREX_ASSERT(m_direction < AMREX_SPACEDIM) and aborts any
+    // assertion-enabled build - the case could not be run with DEBUG=TRUE at
+    // all. SphereIF is the same circle in 2D, so the geometry is unchanged.
+    // Laplace_2D_SecondOrder already carried this fix; this case did not.
+    EB2::SphereIF inner_cyl(inner_r, center, false);
+    EB2::SphereIF outer_cyl(outer_r, center, true);
 #else
     EB2::CylinderIF inner_cyl(inner_r, 20, 2, center, false);
     EB2::CylinderIF outer_cyl(outer_r, 20, 2, center, true);
+#endif
     auto annulus_solid = EB2::makeUnion(inner_cyl, outer_cyl);
     auto gshop = EB2::makeShop(annulus_solid);
     EB2::Build(gshop, gm, 0, 0);
-#endif
 
     // 1 Ghost cell is sufficient for immediate neighbor search
     int nghost = 1;
@@ -150,6 +152,12 @@ void init_level_with_eb(
         auto const& flagfab = flags[mfi].const_array();
         auto cp_arr = cp_mf.array(mfi);
         auto nrm_arr = nrm_mf.array(mfi);
+        // A MultiCutFab holds nothing for a box with no cut cells, and taking
+        // an array from it there is an error. A uniform run never hits this
+        // because every box of the single level meets the geometry, but a
+        // refined level can have boxes entirely in the fluid or entirely in
+        // the solid. The other EB cases carry the same guard.
+        if (!bcent.ok(mfi) || !bnorm.ok(mfi)) continue;
         auto bc_arr = bcent.const_array(mfi);
         auto bn_arr = bnorm.const_array(mfi);
 
@@ -192,7 +200,16 @@ void init_level_with_eb(
                     cell_center[2] = plo[2] + (k + 0.5) * dx[2];
 #endif
                     Real best_d2 = 1e30;
-                    for (int nk = -1; nk <= 1; ++nk)
+                // In 2D the box has a single k plane, so the neighbour
+                // sweep must not step off it: flagfab(i,j,k-1) is out of
+                // bounds and aborts an assertion-enabled build. The other
+                // EB cases already carry this guard.
+#if (AMREX_SPACEDIM == 3)
+                    const int nk_lo = -1, nk_hi = 1;
+#else
+                    const int nk_lo = 0, nk_hi = 0;
+#endif
+                    for (int nk = nk_lo; nk <= nk_hi; ++nk)
                     {
                         for (int nj = -1; nj <= 1; ++nj)
                         {

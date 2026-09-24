@@ -181,14 +181,14 @@ void Vidyut::solve_potential(
         robin_b[ilev].define(grids[ilev], dmap[ilev], 1, num_grow);
         robin_f[ilev].define(grids[ilev], dmap[ilev], 1, num_grow);
 
-        if (using_ib)
+        if (using_ib && !ib_identity_rows)
         {
             solvemask[ilev].define(grids[ilev], dmap[ilev], 1, 0);
             solvemask[ilev].setVal(1);
         }
     }
 
-    if (using_ib)
+    if (using_ib && !ib_identity_rows)
     {
         set_solver_mask(solvemask, Sborder);
         linsolve_ptr.reset(new MLABecLaplacian(
@@ -217,6 +217,23 @@ void Vidyut::solve_potential(
         rhs[ilev].setVal(0.0);
         acoeff[ilev].setVal(0.0);
         bcoeff[ilev].setVal(-1.0);
+
+        // The potential has a = 0, so a decoupled solid cell would be left
+        // with an empty row. Give it a diagonal; its faces are zeroed in
+        // null_bcoeff_at_ib and its rhs in set_explicit_fluxes_at_ib, so it
+        // solves to zero and never reaches the fluid.
+        if (using_ib && ib_identity_rows)
+        {
+            auto const& sb = Sborder[ilev].const_arrays();
+            auto const& ac = acoeff[ilev].arrays();
+            amrex::ParallelFor(
+                acoeff[ilev],
+                [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+                    if (int(sb[nbx](i, j, k, CMASK_ID)) != 1)
+                        ac[nbx](i, j, k) = 1.0;
+                });
+            amrex::Gpu::streamSynchronize();
+        }
 
         // default to homogenous Neumann
         robin_a[ilev].setVal(0.0);
@@ -464,6 +481,21 @@ void Vidyut::solve_potential(
 
     MLMG mlmg(*linsolve_ptr);
     mlmg.setMaxIter(linsolve_maxiter);
+    {
+        // Bottom-solver controls. With an immersed boundary the cell mask is
+        // usually not coarsenable, so MLMG has a single level and the bottom
+        // solver (BiCGStab by default, 200 iterations, rel. tol. 1e-4) does
+        // the whole work; these let it run to convergence without hypre.
+        ParmParse ppv("vidyut");
+        int bottom_maxiter = -1, bottom_verbose = 0;
+        Real bottom_reltol = -1.0;
+        ppv.query("linsolve_bottom_maxiter", bottom_maxiter);
+        ppv.query("linsolve_bottom_reltol", bottom_reltol);
+        ppv.query("linsolve_bottom_verbose", bottom_verbose);
+        if (bottom_maxiter > 0) mlmg.setBottomMaxIter(bottom_maxiter);
+        if (bottom_reltol > 0.0) mlmg.setBottomTolerance(bottom_reltol);
+        mlmg.setBottomVerbose(bottom_verbose);
+    }
     mlmg.setVerbose(linsolve_verbose);
     mlmg.setPreSmooth(pre_smooth);
     mlmg.setPostSmooth(post_smooth);
