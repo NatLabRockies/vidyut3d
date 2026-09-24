@@ -1,6 +1,17 @@
-# Laplace solve with axisymmetric coordinate system - With EB Support
+# Laplace solve on a Cartesian grid, with EB support
 
-This case tests the Laplace equation solution in axisymmetric coordinate system with a robin boundary condition. The main difference is the use of EB to find a point on the surface.
+This case tests the Laplace equation on a **Cartesian** grid
+(`geometry.coord_sys = 0`) with a **Dirichlet** condition on both immersed
+walls. The wall condition is applied through the generic Robin form below, but
+`inputs2d` sets `a = 1`, `b = 0` on each wall, which reduces it to pure
+Dirichlet; set `prob.b_inner_neumann` or `prob.b_outer_neumann` non-zero to
+exercise the Robin path. The point of the case is the use of EB to locate a
+point on the surface.
+
+The geometry is an annulus, so the solution depends on $r$ alone and satisfies
+the radial Laplace equation below. That radial form is the same in two
+Cartesian dimensions and in axisymmetric coordinates, so the exact solution
+looks axisymmetric even though the operators being tested are Cartesian.
 
 $$\nabla^2\phi=0 \quad \frac{d^2\phi}{dr^2}+\frac{1}{r}\frac{d\phi}{dr}=0$$
 $$\phi(r=R_{min})=\phi_1 \quad \phi(r=R_{max})=\phi_2$$
@@ -19,7 +30,10 @@ The generic boundary condition iin each direction is given by
 
 $$ a \phi_{IB} + b \frac{\phi_c - \phi_{IB}}{d}\frac{d_i}{d} = f_i $$
 
-This expression for $\phi_{IB}$ is plugged into the fluxes and we solve for the potential. The method is first-order accurate.
+This expression for $\phi_{IB}$ is plugged into the fluxes and we solve for the
+potential. This first-order closure ($G_1$) is what the expression above gives;
+the second-order closure used for the convergence results below is described in
+the paper.
 
 ### Build instructions
 
