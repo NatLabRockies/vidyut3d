@@ -75,12 +75,42 @@ void Vidyut::rebuild_level_geometry(
 
         if (preserve_solution)
         {
-            for (const auto& r : comp_ranges())
+            // Restore the old values only where the cell was ALREADY fluid.
+            //
+            // A cell that the coarse level saw as solid carries the decoupled
+            // row's value there, normally zero, and FillPatch/FillCoarsePatch
+            // hands that straight down. When the finer level resolves fluid
+            // that the coarse mask did not have - which is the whole point of
+            // refining across a gap narrower than a coarse cell - restoring it
+            // would write that zero into a cell that is now part of the
+            // solution. Those cells keep what init_level_with_eb just gave
+            // them, which is the case's own initialisation, and the solve
+            // takes it from there.
+            //
+            // The test uses the PRE-rebuild mask, held in `saved`. Geometry
+            // components are injected rather than interpolated (see
+            // comp_ranges), so a fine cell under a solid coarse cell has
+            // exactly 0 there and the comparison is clean.
+            auto ranges = comp_ranges();
+            for (const auto& r : ranges)
             {
                 if (r.is_geometry) continue;
-                MultiFab::Copy(
-                    phi_new[lev], saved, r.scomp, r.scomp, r.ncomp, nghost);
+                const int sc = r.scomp;
+                const int ec = r.scomp + r.ncomp;
+                auto const& sv = saved.const_arrays();
+                auto const& ph = phi_new[lev].arrays();
+                amrex::ParallelFor(
+                    phi_new[lev], amrex::IntVect(nghost),
+                    [=] AMREX_GPU_DEVICE(
+                        int nbx, int i, int j, int k) noexcept {
+                        if (int(sv[nbx](i, j, k, CMASK_ID)) != 1) return;
+                        for (int n = sc; n < ec; n++)
+                        {
+                            ph[nbx](i, j, k, n) = sv[nbx](i, j, k, n);
+                        }
+                    });
             }
+            amrex::Gpu::streamSynchronize();
         }
     }
 #else

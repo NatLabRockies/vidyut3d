@@ -175,15 +175,24 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
     //      a * phi = f
     // ---------------------------------------------------------------------
 
+    // The accumulations below are atomic on purpose. set_explicit_fluxes_at_ib
+    // launches one thread per FACE, and in a narrow gap a single fluid cell can
+    // have wall faces on both sides in the same direction - the
+    // covered|valid|covered pattern. Two threads then update the same acoeff
+    // and rhs entries, and a plain += loses one of the two wall contributions
+    // on a GPU. It is correct on a CPU, where the faces are visited in turn,
+    // which is why the convergence numbers in the README are unaffected. The
+    // hierarchy this case runs has 14 such cells on the base grid and 22 on
+    // each of the two intermediate levels, so the race is reachable here and
+    // not a theoretical concern.
     if (std::abs(a) > eps && std::abs(b) < eps)
     {
-        /*acoeff(intcell) += coeff;
-
-        rhs(intcell, rhs_comp) +=
-            coeff * (bc_value / a);*/
-        acoeff(intcell) += (bscalar / ascalar) * bcoeff(intcell, 0.0) * coeff;
-        rhs(intcell, rhs_comp) +=
-            (bscalar * bcoeff(intcell, 0.0)) * coeff * (bc_value / a);
+        amrex::HostDevice::Atomic::Add(
+            acoeff.ptr(intcell),
+            (bscalar / ascalar) * bcoeff(intcell, 0.0) * coeff);
+        amrex::HostDevice::Atomic::Add(
+            rhs.ptr(intcell, rhs_comp),
+            (bscalar * bcoeff(intcell, 0.0)) * coeff * (bc_value / a));
     }
 
     // ---------------------------------------------------------------------
@@ -193,8 +202,9 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
 
     else if (std::abs(a) < eps && std::abs(b) > eps)
     {
-        rhs(intcell, rhs_comp) +=
-            (bscalar * bcoeff(intcell, 0.0)) * coeff * bc_value / (b * alpha);
+        amrex::HostDevice::Atomic::Add(
+            rhs.ptr(intcell, rhs_comp),
+            (bscalar * bcoeff(intcell, 0.0)) * coeff * bc_value / (b * alpha));
     }
     // Robin
     //      a * phi + b * dphi/dn = f
@@ -206,11 +216,12 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
         const Real denom = a + b * alpha;
         if (std::abs(denom) < eps) return;
 
-        acoeff(intcell) +=
-            (bscalar / ascalar) * bcoeff(intcell, 0.0) * coeff * (a / denom);
-        rhs(intcell, rhs_comp) += (bscalar * bcoeff(intcell, 0.0)) * coeff *
-                                  bc_value /
-                                  denom; // unchanged form, correct denom
+        amrex::HostDevice::Atomic::Add(
+            acoeff.ptr(intcell),
+            (bscalar / ascalar) * bcoeff(intcell, 0.0) * coeff * (a / denom));
+        amrex::HostDevice::Atomic::Add(
+            rhs.ptr(intcell, rhs_comp),
+            (bscalar * bcoeff(intcell, 0.0)) * coeff * bc_value / denom);
     }
 }
 

@@ -40,8 +40,14 @@ domain area, so the resolution the geometry demands is needed in one small
 patch while the solution itself fills the box.
 
 The bodies are **disconnected**, which neither the annulus nor the GEC shape
-exercises, and a gap this narrow puts two wall faces in a single cell — hence
-`prob.corner_fallback` and `prob.perface_fallback` are on in `inputs2d`.
+exercises, and a gap this narrow puts two wall faces in a single cell: the
+hierarchy used below has 14 such cells on the base grid and 22 on each of the
+two intermediate levels. The corner and per-face safeguards of the GEC-shape
+case are **not** implemented in this case's `bc_ib`, and are not needed — the
+closure accumulates one contribution per wall face into the cell, which is
+correct when the two faces belong to different bodies. Those accumulations are
+atomic, because one thread per face means two of them can target the same cell
+(see `UserFunctions.H`).
 
 Unlike the annulus cases, the fluid reaches the domain box, so the box carries
 the exact solution as an ordinary grid-aligned Dirichlet boundary

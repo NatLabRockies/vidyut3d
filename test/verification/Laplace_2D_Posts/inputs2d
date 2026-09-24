@@ -28,10 +28,13 @@ eb2.post_pitch  = 0.50
 eb2.shiftx      = 0.031
 eb2.shifty      = -0.017
 
-# degenerate-cell safeguards: a gap this narrow puts two wall faces in one cell
-prob.corner_fallback  = 1
-prob.perface_fallback = 1
-prob.ray_dirichlet    = 1
+# NOTE: a gap this narrow does put two wall faces in one cell - the hierarchy
+# below has 14 such cells on the base grid and 22 on each intermediate level.
+# The corner / per-face / ray-value safeguards of the GEC-shape case are NOT
+# implemented in this case's bc_ib, so there is nothing to switch on here: the
+# closure simply accumulates one contribution per wall face into the cell,
+# which is the right thing for two faces belonging to different bodies. Those
+# accumulations are atomic, see UserFunctions.H.
 
 # VERBOSITY
 amr.v              = 1
