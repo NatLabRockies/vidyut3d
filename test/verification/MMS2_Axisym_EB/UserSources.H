@@ -10,14 +10,22 @@ using namespace amrex;
 namespace user_sources {
 
 // =====================================================================
-// PURE-TRANSPORT MMS source (chemistry DISABLED in Chemistry.H).
+// PURE-TRANSPORT MMS source.
 //
-// productionRate() returns zero wdot / enerExch, so CKWC contributes
-// nothing. Therefore NO reaction or energy-exchange term is added here.
-// The manufactured solution is verified against TRANSPORT ONLY, which
-// removes the reaction-source inconsistency (different Te / ne / nHE
-// between mechanism and manufactured source) that floored n_e / n_i at
-// 1st order and shifted the net-charge mean.
+// productionRate() in this case's Chemistry.H returns zero wdot and zero
+// enerExch, so CKWC contributes nothing and no reaction or energy-exchange
+// term is added here. Note that ScalarSolve.cpp calls CKWC unconditionally,
+// and that add_user_react_sources uses -= , so it ADDS to the reaction
+// source rather than replacing it: anything productionRate left non-zero
+// would enter the solved equations with no matching term in the source
+// below, and this would stop being a consistent MMS. The chemistry is
+// therefore disabled in Chemistry.H explicitly, not left to cancel by
+// accident - see the note there.
+//
+// Verifying against TRANSPORT ONLY removes the reaction-source
+// inconsistency (different Te / ne / nHE between mechanism and manufactured
+// source) that floored n_e / n_i at 1st order and shifted the net-charge
+// mean.
 //
 // CARTESIAN operators (coord_sys = 0). Manufactured solution:
 //   n_e = r^2/alpha + n0,   n_i = r^2/(2 alpha) + n0
