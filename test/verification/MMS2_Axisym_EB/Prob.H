@@ -988,7 +988,12 @@ void init_level_with_eb(
                     // Only overwrite for regular cells that actually touch a
                     // cut cell in the 3x3 (or 3x3x3) neighborhood.
                     bool has_cut_neighbor = false;
-                    for (int nk = -1; nk <= 1 && !has_cut_neighbor; ++nk)
+#if (AMREX_SPACEDIM == 3)
+                    const int hk_lo = -1, hk_hi = 1;
+#else
+                    const int hk_lo = 0, hk_hi = 0;
+#endif
+                    for (int nk = hk_lo; nk <= hk_hi && !has_cut_neighbor; ++nk)
                     {
                         for (int nj = -1; nj <= 1 && !has_cut_neighbor; ++nj)
                         {
