@@ -112,73 +112,89 @@ void Vidyut::rebuild_level_geometry(
             }
             amrex::Gpu::streamSynchronize();
 
-            // A cell that was solid and is now fluid has no usable value yet.
-            // The restore above deliberately skipped it, and
+            // A cell that was solid and is now fluid has no usable value
+            // yet. The restore above deliberately skipped it, and
             // init_level_with_eb cannot be relied on to have supplied one:
             // writing solution components there is not part of the callback's
             // contract and several cases, MMS2_Axisym_EB among them, write
             // only the mask, the centroids and the normals. Left alone the
             // cell would keep the coarse identity-row value, normally zero.
             //
-            // Extend the solution into those cells instead, by repeatedly
-            // averaging over the face neighbours that already hold a usable
-            // value. Two sweeps reach a cell with no fluid neighbour at all;
-            // anything still unreached keeps what it had, which is no worse
-            // than before. This runs only on a regrid and only over cells that
-            // changed state, so it is cheap.
-            iMultiFab valid(ba, dm, 1, nghost);
+            // Extend the solution into those cells by repeatedly averaging
+            // over the face neighbours that already hold one.
+            //
+            // Three states, and the distinction matters. A solid cell must
+            // neither ask for a value nor give one: it holds the decoupled
+            // row's zero, and where a gap is hidden by the coarse mask the
+            // solid neighbours can be the only ones available, so treating
+            // them as donors would fill the new cell with exactly the zeros
+            // this is meant to remove.
+            constexpr int ST_SOLID = -1; // no value, never a donor
+            constexpr int ST_NEEDS = 0;  // newly fluid, wants a value
+            constexpr int ST_HAS = 1;    // fluid all along, can donate
+
+            // One ghost layer is required: the sweep reads face neighbours,
+            // and the state carries nghost = 0 on both regrid paths, since
+            // level 0 is built with none and the finer levels inherit that.
+            // Physical-boundary ghosts stay ST_SOLID, so they never donate;
+            // FillBoundary supplies the internal and periodic ones.
+            const int ngf = 1;
+            iMultiFab cellstate(ba, dm, 1, ngf);
+            cellstate.setVal(ST_SOLID);
             {
                 auto const& ph = phi_new[lev].const_arrays();
                 auto const& sv = saved.const_arrays();
-                auto const& va = valid.arrays();
+                auto const& st = cellstate.arrays();
                 amrex::ParallelFor(
-                    valid, amrex::IntVect(nghost),
-                    [=] AMREX_GPU_DEVICE(
-                        int nbx, int i, int j, int k) noexcept {
-                        const int fluid_now =
-                            (int(ph[nbx](i, j, k, CMASK_ID)) == 1);
-                        const int fluid_before =
-                            (int(sv[nbx](i, j, k, CMASK_ID)) == 1);
-                        // usable = solid (never read), or fluid all along
-                        va[nbx](i, j, k) = (!fluid_now || fluid_before) ? 1 : 0;
+                    cellstate, [=] AMREX_GPU_DEVICE(
+                                   int nbx, int i, int j, int k) noexcept {
+                        if (int(ph[nbx](i, j, k, CMASK_ID)) != 1)
+                        {
+                            st[nbx](i, j, k) = ST_SOLID;
+                        } else
+                        {
+                            st[nbx](i, j, k) =
+                                (int(sv[nbx](i, j, k, CMASK_ID)) == 1)
+                                    ? ST_HAS
+                                    : ST_NEEDS;
+                        }
                     });
                 amrex::Gpu::streamSynchronize();
             }
 
+            auto rr = comp_ranges();
+            amrex::Gpu::DeviceVector<CompRange> d_rr(rr.size());
+            amrex::Gpu::copyAsync(
+                amrex::Gpu::hostToDevice, rr.begin(), rr.end(), d_rr.begin());
+            amrex::Gpu::streamSynchronize();
+            const CompRange* rp = d_rr.data();
+            const int nr = static_cast<int>(rr.size());
+
+            MultiFab phisnap(ba, dm, ncomp, ngf);
+            iMultiFab stsnap(ba, dm, 1, ngf);
             for (int sweep = 0; sweep < 4; sweep++)
             {
-                phi_new[lev].FillBoundary(geom[lev].periodicity());
-                valid.FillBoundary(geom[lev].periodicity());
-                MultiFab phi_in(ba, dm, ncomp, nghost);
-                iMultiFab valid_in(ba, dm, 1, nghost);
-                MultiFab::Copy(phi_in, phi_new[lev], 0, 0, ncomp, nghost);
-                amrex::iMultiFab::Copy(valid_in, valid, 0, 0, 1, nghost);
+                MultiFab::Copy(phisnap, phi_new[lev], 0, 0, ncomp, 0);
+                amrex::iMultiFab::Copy(stsnap, cellstate, 0, 0, 1, 0);
+                phisnap.FillBoundary(geom[lev].periodicity());
+                stsnap.FillBoundary(geom[lev].periodicity());
 
-                auto const& pin = phi_in.const_arrays();
-                auto const& vin = valid_in.const_arrays();
+                auto const& pin = phisnap.const_arrays();
+                auto const& sin = stsnap.const_arrays();
                 auto const& pout = phi_new[lev].arrays();
-                auto const& vout = valid.arrays();
-                auto rr = comp_ranges();
-                amrex::Gpu::DeviceVector<CompRange> d_rr(rr.size());
-                amrex::Gpu::copyAsync(
-                    amrex::Gpu::hostToDevice, rr.begin(), rr.end(),
-                    d_rr.begin());
-                amrex::Gpu::streamSynchronize();
-                const CompRange* rp = d_rr.data();
-                const int nr = static_cast<int>(rr.size());
-
+                auto const& sout = cellstate.arrays();
                 amrex::ParallelFor(
-                    valid, [=] AMREX_GPU_DEVICE(
-                               int nbx, int i, int j, int k) noexcept {
-                        if (vin[nbx](i, j, k) == 1) return;
+                    cellstate, [=] AMREX_GPU_DEVICE(
+                                   int nbx, int i, int j, int k) noexcept {
+                        if (sin[nbx](i, j, k) != ST_NEEDS) return;
                         int cnt = 0;
                         AMREX_D_TERM(
-                            cnt += (vin[nbx](i - 1, j, k) == 1) +
-                                   (vin[nbx](i + 1, j, k) == 1);
-                            , cnt += (vin[nbx](i, j - 1, k) == 1) +
-                                     (vin[nbx](i, j + 1, k) == 1);
-                            , cnt += (vin[nbx](i, j, k - 1) == 1) +
-                                     (vin[nbx](i, j, k + 1) == 1);)
+                            cnt += (sin[nbx](i - 1, j, k) == ST_HAS) +
+                                   (sin[nbx](i + 1, j, k) == ST_HAS);
+                            , cnt += (sin[nbx](i, j - 1, k) == ST_HAS) +
+                                     (sin[nbx](i, j + 1, k) == ST_HAS);
+                            , cnt += (sin[nbx](i, j, k - 1) == ST_HAS) +
+                                     (sin[nbx](i, j, k + 1) == ST_HAS);)
                         if (cnt == 0) return;
                         for (int r = 0; r < nr; r++)
                         {
@@ -188,28 +204,22 @@ void Vidyut::rebuild_level_geometry(
                             {
                                 amrex::Real acc = 0.0;
                                 AMREX_D_TERM(
-                                    acc += (vin[nbx](i - 1, j, k) == 1)
-                                               ? pin[nbx](i - 1, j, k, n)
-                                               : 0.0;
-                                    acc += (vin[nbx](i + 1, j, k) == 1)
-                                               ? pin[nbx](i + 1, j, k, n)
-                                               : 0.0;
-                                    , acc += (vin[nbx](i, j - 1, k) == 1)
-                                                 ? pin[nbx](i, j - 1, k, n)
-                                                 : 0.0;
-                                    acc += (vin[nbx](i, j + 1, k) == 1)
-                                               ? pin[nbx](i, j + 1, k, n)
-                                               : 0.0;
-                                    , acc += (vin[nbx](i, j, k - 1) == 1)
-                                                 ? pin[nbx](i, j, k - 1, n)
-                                                 : 0.0;
-                                    acc += (vin[nbx](i, j, k + 1) == 1)
-                                               ? pin[nbx](i, j, k + 1, n)
-                                               : 0.0;)
+                                    if (sin[nbx](i - 1, j, k) == ST_HAS) acc +=
+                                    pin[nbx](i - 1, j, k, n);
+                                    if (sin[nbx](i + 1, j, k) == ST_HAS) acc +=
+                                    pin[nbx](i + 1, j, k, n);
+                                    , if (sin[nbx](i, j - 1, k) == ST_HAS)
+                                          acc += pin[nbx](i, j - 1, k, n);
+                                    if (sin[nbx](i, j + 1, k) == ST_HAS) acc +=
+                                    pin[nbx](i, j + 1, k, n);
+                                    , if (sin[nbx](i, j, k - 1) == ST_HAS)
+                                          acc += pin[nbx](i, j, k - 1, n);
+                                    if (sin[nbx](i, j, k + 1) == ST_HAS) acc +=
+                                    pin[nbx](i, j, k + 1, n);)
                                 pout[nbx](i, j, k, n) = acc / cnt;
                             }
                         }
-                        vout[nbx](i, j, k) = 1;
+                        sout[nbx](i, j, k) = ST_HAS;
                     });
                 amrex::Gpu::streamSynchronize();
             }
