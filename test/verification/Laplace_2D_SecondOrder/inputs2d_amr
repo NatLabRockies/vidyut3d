@@ -25,7 +25,17 @@ amr.v              = 1       # verbosity in Amr
 amr.max_level       = 2       # maximum level number allowed
 amr.blocking_factor = 8       # block factor in grid generation
 amr.max_grid_size   = 32
-amr.n_error_buf     = 2       # fluid cells kept refined on either side of the boundary
+# 8, not 2, to match what the README recommends: this deck used to ship with 2
+# while the README said to use at least 4 and preferably 8.
+#
+# 2 is not unsafe - the run-time clearance check passes with three coarse cells
+# to spare and prints no warning - but it is not what this case is meant to
+# show. The README's measured table has the largest error sitting AT the
+# coarse-fine interface at 2 (phi Linf and CF-zone Linf both 1.502e-3), whereas
+# at 8 the interface error drops to 4.599e-4, the maximum moves back to the
+# immersed boundary where it belongs, and the composite matches uniform 512 in
+# the max norm with 40% fewer cells.
+amr.n_error_buf     = 8       # fluid cells kept refined on either side of the boundary
 
 # The cut cells never move, so the grids are the same at every regrid. Regrid
 # once at startup and leave the hierarchy alone for the rest of the run.

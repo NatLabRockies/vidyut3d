@@ -88,7 +88,7 @@ latter uses `ds.all_data()`, which gathers coarse cells that a finer level cover
 so double-counts them on an AMR hierarchy.
 
 ```
-python3 amr_error.py -f uni32 uni64 uni128 uni256 uni512 amr64L2 amr128L2 --plot conv.png
+python3 amr_error.py -f uni128 uni256 uni512 amr32 amr64 amr128 --plot conv.png
 ```
 
 ### phi error, uniform grid
