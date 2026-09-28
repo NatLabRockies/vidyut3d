@@ -1,0 +1,170 @@
+max_step  = 120000000
+stop_time = 20e-9 #1000 rf cycles
+
+# PROBLEM SIZE & GEOMETRY
+geometry.is_periodic =  0  1  1
+geometry.coord_sys   =  0       # 0 => cart
+geometry.prob_lo     =  0.0   0.0     0.0 
+geometry.prob_hi     =  5e-4  2.604166e-6  7.8125e-6
+amr.n_cell           =  8192  4  4
+
+# VERBOSITY
+amr.v              = 1       # verbosity in Amr
+
+# REFINEMENT
+amr.max_level       = 0       # maximum level number allowed
+amr.blocking_factor = 2       # block factor in grid generation
+amr.max_grid_size   = 16384
+
+amr.regrid_int      = 5       # how often to regrid
+
+# TIME STEP CONTROL
+#vidyut.adaptive_dt = 1
+vidyut.dt             = 1e-15
+
+vidyut.user_defined_potential = 1
+vidyut.user_defined_species = 1
+vidyut.user_defined_vel = 1
+vidyut.num_timestep_correctors=1
+
+# Tagging
+vidyut.tagged_vars = Potential Electron_Temp
+vidyut.Potential_refine = 1e20
+vidyut.Potential_refinegrad = 4000.0
+vidyut.Electron_Temp_refine = 11000
+vidyut.Electron_Temp_refinegrad = 1e20
+
+#0 - periodic
+#1 - Dirichlet
+#2 - Homogenous Neumann
+#3 - Inhomogenous Neumann
+#4 - Robin
+
+vidyut.pot_bc_lo = 1 0 0
+vidyut.pot_bc_hi = 1 0 0
+
+vidyut.eden_bc_lo = 1 0 0
+vidyut.eden_bc_hi = 3 0 0 
+
+vidyut.eenrg_bc_lo = 1 0 0
+vidyut.eenrg_bc_hi = 3 0 0
+
+vidyut.ion_bc_lo = 1 0 0
+vidyut.ion_bc_hi = 3 0 0
+
+vidyut.neutral_bc_lo = 1 0 0
+vidyut.neutral_bc_hi = 3 0 0
+
+# PLOTFILES
+amr.plot_file  = plt    # root name of plot file
+amr.plot_int   = 100000     # number of timesteps between plot files
+
+# CHECKPOINT
+amr.chk_file = chk      # root name of checkpoint file
+amr.chk_int  = 100000       # number of timesteps between checkpoint files
+
+vidyut.bound_specden=1
+vidyut.min_species_density=1e11
+vidyut.min_electron_density=1e14
+vidyut.min_electron_temp=1160.4518
+vidyut.linsolve_maxiter=200
+vidyut.elecenergy_solve=1
+vidyut.multicompsolves=1
+
+vidyut.gas_pressure=101325.0
+vidyut.gas_temperature=1500.0
+vidyut.bg_species_ids=1 2
+
+vidyut.hyp_order=5
+vidyut.weno_scheme=3
+vidyut.num_timestep_correctors=1
+vidyut.solver_verbose=0
+vidyut.evolve_verbose=0
+
+vidyut.track_current_den = 1
+vidyut.track_integrated_currents=1
+vidyut.current_loc_surfaces=1
+vidyut.print_current_int=10000
+
+#=================================
+#if using dirichlet at arc edge
+#turn this on
+#=================================
+#prob.arc_edge_dirichlet=1
+#prob.wallpot=0.1
+#vidyut.pot_bc_lo = 1 0 0
+#=================================
+
+#=================================
+#100 A condition
+#=================================
+#prob.bulkplasmatemp=7560.0
+#prob.bulkelectemp=7560.0
+#prob.spec_arc=1e15
+#prob.Arp_arc=5.97e21
+#prob.Hp_arc=6.67e20
+#prob.H_arc=9.93e22
+#prob.walltemp=1941.0
+#=================================
+#if using electric field at arc edge
+#turn this on
+#=================================
+#prob.arc_edge_dirichlet=0
+#prob.arc_efield=-866.0
+#prob.wallpot=0.0
+#vidyut.pot_bc_lo = 3 0 0
+#=================================
+#=================================
+
+#=================================
+#150 A condition
+#=================================
+#prob.bulkplasmatemp=9863.0
+#prob.bulkelectemp=9863.0
+#prob.spec_arc=1e15
+#prob.Arp_arc=1.23e22
+#prob.Hp_arc=1.4e21
+#prob.H_arc=6.88e22
+#prob.walltemp=2213.0
+#=================================
+#if using electric field at arc edge
+#turn this on
+#=================================
+#prob.arc_edge_dirichlet=0
+#prob.arc_efield=-819.0
+#prob.wallpot=0.0
+#vidyut.pot_bc_lo = 3 0 0
+#=================================
+#=================================
+
+#=================================
+#200 A condition
+#=================================
+prob.bulkplasmatemp=10713.0
+prob.bulkelectemp=10713.0
+prob.spec_arc=1e15
+prob.Arp_arc=2.6e22
+prob.Hp_arc=2.46e21
+prob.H_arc=6.0e22
+prob.walltemp=2312.0
+#=================================
+#if using electric field at arc edge
+#turn this on
+#=================================
+prob.arc_edge_dirichlet=0
+prob.arc_efield=-652.0
+prob.wallpot=0.0
+vidyut.pot_bc_lo = 3 0 0
+#=================================
+#=================================
+
+prob.beta_fe=10
+prob.h2frac=0.05
+prob.gama_se=0.02
+prob.pecletnum=1600
+
+vidyut.scaling_species_ids=0 3 4 5 6 7 8 9 10 11 12 13 14
+vidyut.scale_values=1e21 1e21 1e21 1e21 1e21 1e21 1e21 1e21 1e21 1e21 1e21 1e21 1e21
+vidyut.time_scale=1e-14
+vidyut.potential_scale=1.0
+vidyut.elecenergy_scale=100.0
