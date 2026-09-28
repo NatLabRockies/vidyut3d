@@ -34,7 +34,7 @@ This is quite a long 1D run. The current at the anode
 can be tracked through the integrated_currents.0 file.
 It needs about 3-4 days to get to finish.
 
-### literature
+### Literature
 
 More information about this case can be obtained in our paper:
 H Sitaramanet al. "Elucidating key reducing species beyond ions in hydrogen plasma smelting reduction of iron ore." 
