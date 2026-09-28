@@ -37,5 +37,5 @@ It needs about 3-4 days to get to finish.
 ### Literature
 
 More information about this case can be obtained in our paper:
-H Sitaramanet al. "Elucidating key reducing species beyond ions in hydrogen plasma smelting reduction of iron ore." 
+H Sitaraman et al. "Elucidating key reducing species beyond ions in hydrogen plasma smelting reduction of iron ore."
 Chemical Engineering Science (2026): 124377. See https://www.sciencedirect.com/science/article/pii/S0009250926010924
