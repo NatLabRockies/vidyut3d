@@ -325,10 +325,13 @@ AMREX_GPU_DEVICE AMREX_INLINE void species_bc(
             // total flux
             amrex::Real flx = flx_th + flx_fe + flx_te + flx_se;
             // amrex::AllPrint()
-            //     << "dx in nm, flx th,fe,te,se:" << dx[0] * 1e9 << "\t" << flx_th
-            //     << "\t" << flx_fe << "\t" << flx_te << "\t" << flx_se << "\n";
+            //     << "dx in nm, flx th,fe,te,se:" << dx[0] * 1e9 << "\t" <<
+            //     flx_th
+            //     << "\t" << flx_fe << "\t" << flx_te << "\t" << flx_se <<
+            //     "\n";
             // amrex::AllPrint()
-            //     << "dx (nm), electron and ion current density (mega Amps/m2):"
+            //     << "dx (nm), electron and ion current density (mega
+            //     Amps/m2):"
             //     << dx[0] * 1e9 << "\t" << flx * ECHARGE / 1e6 << "\t"
             //     << -flx_se / prob_parm.gama_se * ECHARGE / 1e6 << "\n";
             // amrex::AllPrint() << "H+ flux, E field:" << Hpflux << "\t"
