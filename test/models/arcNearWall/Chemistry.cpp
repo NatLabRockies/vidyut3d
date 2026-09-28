@@ -14,7 +14,7 @@ void CKAWT(amrex::Real* awt) { atomicWeight(awt); }
 // Returns the vector of strings of element names
 void CKSYME_STR(amrex::Vector<std::string>& ename)
 {
-    ename.resize(2);
+    ename.resize(3);
     ename[0] = "E";
     ename[1] = "Ar";
     ename[2] = "H";
