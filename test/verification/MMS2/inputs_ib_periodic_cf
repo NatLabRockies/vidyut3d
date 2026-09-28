@@ -1,0 +1,113 @@
+# MMS2 with a coarse-fine interface deliberately placed ON a periodic
+# boundary, to exercise Vidyut::check_ib_cf_clearance in 3D.
+#
+# The domain is periodic in y and z; the immersed walls are the planes x = 0
+# and x = 1. vidyut.refine_box_* refines a box that covers only the lower half
+# of z, so the refined region has an edge AT z = 0. The cell on the far side of
+# that edge is z = zmax, a real neighbour reached through the periodic wrap, and
+# it is not refined - so there is a coarse-fine interface lying on the periodic
+# boundary. The box also hugs the x = 0 wall, so that interface is close to it
+# and the clearance check should report a small gap.
+#
+# The point of this deck is that the interface-detection code has to follow the
+# periodic wrap: a version that skipped every out-of-domain neighbour does not
+# see the interface at z = 0 at all.
+#
+# Honest limitation. This pins the behaviour but it does not, on its own, prove
+# the periodic handling matters: the same box also has ordinary interfaces at
+# x = 0.0625 and z = 0.0625 which are just as close to the x = 0 wall, so the
+# reported gap is 1 cell either way. Building a deck where the periodic
+# interface is the ONLY one near a wall is not possible with a wall that is a
+# plane spanning the whole periodic direction, because every interface in z
+# covers the same range in x. Treat this as a regression test for the code path,
+# not as a discriminating test.
+#
+#   mpirun -n 4 ./vidyut3d.*.ex inputs_ib_periodic_cf max_step=10
+#
+# Expect an "IB coarse-fine clearance" line reporting a gap of 1-2 cells.
+
+max_step  = 1000
+stop_time = 10.0
+
+# PROBLEM SIZE & GEOMETRY
+geometry.is_periodic =  0  1  1
+geometry.coord_sys   =  0       # 0 => cart
+geometry.prob_lo     =  -0.25  0.0    0.0 
+geometry.prob_hi     =  1.25  0.125  0.125
+amr.n_cell           =  96  8  8
+
+# VERBOSITY
+amr.v              = 1       # verbosity in Amr
+
+# REFINEMENT
+amr.max_level       = 1
+amr.blocking_factor_x = 4     # block factor in grid generation
+amr.blocking_factor_y = 4     # block factor in grid generation
+amr.blocking_factor_z = 4     # block factor in grid generation
+amr.max_grid_size   = 8
+
+amr.regrid_int      = 2       # how often to regrid
+
+# TIME STEP CONTROL
+vidyut.dt             = 0.05
+
+vidyut.user_defined_potential = 1
+vidyut.user_defined_species = 1
+vidyut.user_defined_vel = 1
+vidyut.using_ib=1
+
+vidyut.bound_specden=1
+vidyut.min_species_density=1e-11
+vidyut.min_electron_density=1e-11
+vidyut.min_electron_temp=1e-11
+vidyut.linsolve_maxiter=200
+vidyut.elecenergy_solve=1
+vidyut.bg_species_ids=1
+vidyut.gas_temperature=1e-50
+
+# Tagging
+
+#0 - periodic
+#1 - Dirichlet
+#2 - Homogenous Neumann
+#3 - Inhomogenous Neumann
+#4 - Robin
+
+vidyut.pot_bc_lo = 4 0 0
+vidyut.pot_bc_hi = 4 0 0
+
+vidyut.eden_bc_lo = 1 0 0
+vidyut.eden_bc_hi = 1 0 0
+
+vidyut.eenrg_bc_lo = 1 0 0
+vidyut.eenrg_bc_hi = 1 0 0
+
+vidyut.ion_bc_lo = 1 0 0
+vidyut.ion_bc_hi = 1 0 0
+
+vidyut.neutral_bc_lo = 2 0 0
+vidyut.neutral_bc_hi = 2 0 0
+
+# PLOTFILES
+amr.plot_file  = plt    # root name of plot file
+amr.plot_int   = 10000     # number of timesteps between plot files
+
+# CHECKPOINT
+amr.chk_file = chk      # root name of checkpoint file
+amr.chk_int  = -1       # number of timesteps between checkpoint files
+prob.axial_dir = 0
+
+#for checking scaling
+#vidyut.scaling_species_ids=0
+#vidyut.scale_values=100.0
+#vidyut.time_scale=3.5
+#vidyut.potential_scale=2.0
+#vidyut.elecenergy_scale=4.0
+
+# --- the deliberately placed coarse-fine interface -------------------------
+# domain is x[-0.25,1.25] y[0,0.125] z[0,0.125] on 96 x 8 x 8, so dx = 0.015625.
+# Refine x in [0, 0.0625] (4 cells out from the x=0 wall), all y, and z in
+# [0, 0.0625] (the lower 4 of 8 cells) so the box edge sits on z = 0.
+amr.n_error_buf     = 0       # do not widen the box; the interface is deliberate
+vidyut.refine_box_lo = 0.0    0.0    0.0
+vidyut.refine_box_hi = 0.0625 0.125  0.0625

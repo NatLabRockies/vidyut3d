@@ -269,6 +269,30 @@ void Vidyut::ErrorEst(int lev, TagBoxArray& tags, Real time, int ngrow)
     {
         first = false;
         ParmParse pp("vidyut");
+
+        // Geometry-locked refinement of the IB cut cells. Independent of
+        // tagged_vars, so it can be used on its own for static refinement.
+        pp.query("refine_cutcells", refine_cutcells);
+        pp.query("cutcell_vfrac_lo", cutcell_vfrac_lo);
+        pp.query("cutcell_vfrac_hi", cutcell_vfrac_hi);
+
+        // Static refinement of a box given in physical coordinates.
+        if (pp.contains("refine_box_lo") || pp.contains("refine_box_hi"))
+        {
+            refine_box_lo.resize(AMREX_SPACEDIM);
+            refine_box_hi.resize(AMREX_SPACEDIM);
+            pp.getarr("refine_box_lo", refine_box_lo, 0, AMREX_SPACEDIM);
+            pp.getarr("refine_box_hi", refine_box_hi, 0, AMREX_SPACEDIM);
+            refine_box = 1;
+        }
+
+        if (refine_cutcells && !using_ib)
+        {
+            amrex::Abort(
+                "vidyut.refine_cutcells needs vidyut.using_ib=1: without an "
+                "immersed boundary there are no cut cells to tag\n");
+        }
+
         if (pp.contains("tagged_vars"))
         {
             int nvars = pp.countval("tagged_vars");
@@ -311,7 +335,7 @@ void Vidyut::ErrorEst(int lev, TagBoxArray& tags, Real time, int ngrow)
         }
     }
 
-    if (refine_phi.size() == 0) return;
+    if (refine_phi.size() == 0 && !refine_cutcells && !refine_box) return;
 
     //    const int clearval = TagBox::CLEAR;
     const int tagval = TagBox::SET;
@@ -319,6 +343,46 @@ void Vidyut::ErrorEst(int lev, TagBoxArray& tags, Real time, int ngrow)
     const MultiFab& state = phi_new[lev];
     MultiFab Sborder(grids[lev], dmap[lev], state.nComp(), 1);
     FillPatch(lev, time, Sborder, 0, Sborder.nComp());
+
+    // cutcell_based_refinement tags a cell only when its CMASK lies strictly
+    // between cutcell_vfrac_lo and cutcell_vfrac_hi. A case that stores a 0/1
+    // mask instead of the volume fraction never produces such a value, so the
+    // tagging returns nothing, the hierarchy stays unrefined, and the run
+    // looks like a successful AMR run that simply did not help. Check once, on
+    // the coarsest level, and stop rather than hand back a mesh nobody asked
+    // for.
+    if (refine_cutcells && lev == 0 && !cutcell_mask_checked)
+    {
+        cutcell_mask_checked = 1;
+        const amrex::Real vlo = cutcell_vfrac_lo;
+        const amrex::Real vhi = cutcell_vfrac_hi;
+        amrex::Long nfrac = amrex::ReduceSum(
+            Sborder, 0,
+            [=] AMREX_GPU_HOST_DEVICE(
+                amrex::Box const& bx,
+                amrex::Array4<amrex::Real const> const& sb) -> amrex::Long {
+                amrex::Long n = 0;
+                amrex::Loop(bx, [=, &n](int i, int j, int k) noexcept {
+                    const amrex::Real c = sb(i, j, k, CMASK_ID);
+                    if (c > vlo && c < vhi) n++;
+                });
+                return n;
+            });
+        amrex::ParallelDescriptor::ReduceLongSum(nfrac);
+        if (nfrac == 0)
+        {
+            amrex::Abort(
+                "vidyut.refine_cutcells=1 but no cell on level 0 has "
+                "vidyut.cutcell_vfrac_lo < CMASK < vidyut.cutcell_vfrac_hi, so "
+                "it would tag nothing and the mesh would stay unrefined.\n"
+                "  Usually this means the case writes a 0/1 CMASK rather than "
+                "the volume fraction. Set phi(i,j,k,CMASK_ID) = vfrac(i,j,k) "
+                "in initdomaindata_eb: every other consumer tests int(cmask) "
+                "or cmask < 1, so the two agree cell for cell.\n"
+                "  If the geometry really has no cut cells, set "
+                "vidyut.refine_cutcells=0.\n");
+        }
+    }
 
 #ifdef _OPENMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
@@ -351,6 +415,39 @@ void Vidyut::ErrorEst(int lev, TagBoxArray& tags, Real time, int ngrow)
                     i, j, k, tagfab, statefab, refine_phigrad_dat,
                     refine_phi_comps_dat, ntagged_comps, tagval);
             });
+
+        if (refine_box)
+        {
+            const auto dxa = geom[lev].CellSizeArray();
+            const auto plo = geom[lev].ProbLoArray();
+            GpuArray<Real, AMREX_SPACEDIM> blo = {AMREX_D_DECL(
+                refine_box_lo[0], refine_box_lo[1], refine_box_lo[2])};
+            GpuArray<Real, AMREX_SPACEDIM> bhi = {AMREX_D_DECL(
+                refine_box_hi[0], refine_box_hi[1], refine_box_hi[2])};
+            amrex::ParallelFor(
+                Sborder,
+                [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+                    auto tagfab = tags_arrays[nbx];
+                    box_based_refinement(
+                        i, j, k, tagfab, plo, dxa, blo, bhi, tagval);
+                });
+        }
+
+        if (refine_cutcells)
+        {
+            amrex::Real vfrac_lo = cutcell_vfrac_lo;
+            amrex::Real vfrac_hi = cutcell_vfrac_hi;
+
+            amrex::ParallelFor(
+                Sborder,
+                [=] AMREX_GPU_DEVICE(int nbx, int i, int j, int k) noexcept {
+                    auto statefab = sb_arrays[nbx];
+                    auto tagfab = tags_arrays[nbx];
+                    cutcell_based_refinement(
+                        i, j, k, tagfab, statefab, CMASK_ID, vfrac_lo, vfrac_hi,
+                        tagval);
+                });
+        }
     }
 }
 
@@ -502,7 +599,20 @@ void Vidyut::ReadParameters()
 #ifdef AMREX_USE_HYPRE
         pp.query("use_hypre", use_hypre);
 #endif
+        pp.query("freeze_etemp", freeze_etemp);
         pp.query("using_ib", using_ib);
+        pp.query("ib_identity_rows", ib_identity_rows);
+        pp.query("ib_cf_clearance_warn", ib_cf_clearance_warn);
+        if (ib_identity_rows < 0)
+        {
+            ib_identity_rows = (max_level > 0) ? 1 : 0;
+        }
+        if (using_ib)
+        {
+            amrex::Print() << "IB solid cells: "
+                           << (ib_identity_rows ? "own row" : "overset mask")
+                           << "\n";
+        }
 
         if (using_ib)
         {
@@ -570,6 +680,7 @@ void Vidyut::null_bcoeff_at_ib(
     int numcomps)
 {
     int captured_ncomps = numcomps;
+    int captured_identity_rows = ib_identity_rows;
     for (MFIter mfi(Sborder, TilingIfNotGPU()); mfi.isValid(); ++mfi)
     {
         const Box& bx = mfi.tilebox();
@@ -616,10 +727,13 @@ void Vidyut::null_bcoeff_at_ib(
                         }
                     } else if (covered_interface) // 0*0 case
                     {
-                        // keeping bcoeff non zero in dead cells just in case
+                        // keeping bcoeff non zero in dead cells just in case,
+                        // unless the solid cells are carrying rows of their
+                        // own, where they have to be fully decoupled
                         for (int sp = 0; sp < captured_ncomps; sp++)
                         {
-                            face_bcoeff_arr[idim](face, sp) = 1.0;
+                            face_bcoeff_arr[idim](face, sp) =
+                                captured_identity_rows ? 0.0 : 1.0;
                         }
                     } else
                     {
@@ -731,6 +845,134 @@ void Vidyut::set_solver_mask(
                     smask_arr(i, j, k) = int(sb_arr(i, j, k, CMASK_ID));
                 });
         }
+    }
+}
+
+// A coarse-fine interface that runs within a cell or two of an immersed wall
+// makes the composite solve lose accuracy there, and the resulting error does
+// not shrink under refinement - it simply stops converging, which is easy to
+// miss because the answer still looks plausible. Measure the smallest gap and
+// say so. The remedy is a larger amr.n_error_buf (or a tagging rule that keeps
+// the refined region clear of the wall).
+// A coarse-fine interface that runs within a cell or two of an immersed wall
+// makes the composite solve lose accuracy there, and the error then stops
+// converging under refinement - easy to miss, because the answer still looks
+// plausible. Measure the smallest gap and say so.
+//
+// The interface is found from the COARSE side. Looking from the fine side does
+// not work: solid cells are never tagged for refinement, so a fine level always
+// stops at the wall and its edge there is indistinguishable from a real
+// coarse-fine interface. On the coarse level a cell that is uncovered, fluid,
+// and next to a covered cell is unambiguously on a coarse-fine interface.
+void Vidyut::check_ib_cf_clearance() const
+{
+    if (!using_ib || finest_level < 1 || ib_cf_clearance_warn <= 0) return;
+
+    const int RAD = amrex::max(6, ib_cf_clearance_warn + 2);
+    int worst = RAD + 1; // sentinel: no wall found within RAD
+
+    for (int lev = 0; lev < finest_level; lev++)
+    {
+        // 1 where this level owns the cell, 0 where the finer level covers
+        // it. The ghost-aware overload fills the ghost region for us and
+        // honours periodicity, so an interface that wraps a periodic boundary
+        // is seen rather than skipped.
+        iMultiFab fm = makeFineMask(
+            grids[lev], dmap[lev], IntVect(1), grids[lev + 1], refRatio(lev),
+            geom[lev].periodicity(), 1, 0);
+
+        // cell mask with ghosts; unfilled ghosts read as fluid so a missing
+        // neighbour can never manufacture a warning
+        MultiFab cm(grids[lev], dmap[lev], 1, RAD);
+        cm.setVal(1.0, RAD);
+        amrex::MultiFab::Copy(cm, phi_new[lev], CMASK_ID, 0, 1, 0);
+        cm.FillBoundary(geom[lev].periodicity());
+
+        const Box& domain = geom[lev].Domain();
+        const int* dlo_p = domain.loVect();
+        const int* dhi_p = domain.hiVect();
+        GpuArray<int, AMREX_SPACEDIM> dlo = {
+            AMREX_D_DECL(dlo_p[0], dlo_p[1], dlo_p[2])};
+        GpuArray<int, AMREX_SPACEDIM> dhi = {
+            AMREX_D_DECL(dhi_p[0], dhi_p[1], dhi_p[2])};
+        // A periodic ghost is a real neighbour and both masks have it filled,
+        // so only a physical boundary is skipped below.
+        GpuArray<int, AMREX_SPACEDIM> isper = {AMREX_D_DECL(
+            geom[lev].isPeriodic(0), geom[lev].isPeriodic(1),
+            geom[lev].isPeriodic(2))};
+        const int rad = RAD;
+
+        amrex::Real lev_worst_r = amrex::ReduceMin(
+            cm, fm, 0,
+            [=] AMREX_GPU_HOST_DEVICE(
+                Box const& bx, Array4<Real const> const& cmarr,
+                Array4<int const> const& fmarr) -> amrex::Real {
+                amrex::Real m = amrex::Real(rad + 1);
+                amrex::Loop(bx, [=, &m](int i, int j, int k) noexcept {
+                    if (cmarr(i, j, k) < 1.0) return; // fluid only
+                    if (fmarr(i, j, k) == 0) return;  // must be uncovered
+                    IntVect iv{AMREX_D_DECL(i, j, k)};
+                    bool oncf = false;
+                    for (int d = 0; d < AMREX_SPACEDIM; d++)
+                    {
+                        for (int sg = -1; sg <= 1; sg += 2)
+                        {
+                            IntVect nb = iv;
+                            nb[d] += sg;
+                            if (!isper[d] && (nb[d] < dlo[d] || nb[d] > dhi[d]))
+                                continue;
+                            if (fmarr(nb) == 0) oncf = true; // covered by fine
+                        }
+                    }
+                    if (!oncf) return;
+                    const int rj = (AMREX_SPACEDIM >= 2) ? 1 : 0;
+                    const int rk = (AMREX_SPACEDIM == 3) ? 1 : 0;
+                    for (int r = 1; r <= rad; r++)
+                    {
+                        bool hit = false;
+                        for (int kk = -r * rk; kk <= r * rk; kk++)
+                            for (int jj = -r * rj; jj <= r * rj; jj++)
+                                for (int ii = -r; ii <= r; ii++)
+                                {
+                                    int cheb = amrex::max(
+                                        amrex::Math::abs(ii),
+                                        amrex::max(
+                                            amrex::Math::abs(jj),
+                                            amrex::Math::abs(kk)));
+                                    if (cheb != r) continue;
+                                    if (cmarr(i + ii, j + jj, k + kk) < 1.0)
+                                        hit = true;
+                                }
+                        if (hit)
+                        {
+                            m = amrex::min(m, amrex::Real(r));
+                            break;
+                        }
+                    }
+                });
+                return m;
+            });
+        worst = amrex::min(worst, int(lev_worst_r + 0.5));
+    }
+
+    ParallelDescriptor::ReduceIntMin(worst);
+
+    if (worst < ib_cf_clearance_warn)
+    {
+        amrex::Print()
+            << "\n*** WARNING: a coarse-fine interface runs " << worst
+            << " coarse cell(s) from the immersed boundary (want >= "
+            << ib_cf_clearance_warn << ").\n"
+            << "*** The composite solve loses accuracy there and the error\n"
+            << "*** will stop converging under refinement. Raise\n"
+            << "*** amr.n_error_buf, or tag so the refined region clears the "
+               "wall.\n\n";
+    } else if (evolve_verbose)
+    {
+        amrex::Print() << "IB coarse-fine clearance: nearest wall is "
+                       << (worst > RAD ? std::string("> ") + std::to_string(RAD)
+                                       : std::to_string(worst))
+                       << " coarse cell(s) from an interface, ok\n";
     }
 }
 
@@ -850,7 +1092,7 @@ void Vidyut::correct_efields_ib(
     }
 }
 
-#ifdef ENABLE_IB_FIELD_INTERPOLATION
+#if defined(ENABLE_IB_FIELD_INTERPOLATION) && defined(AMREX_USE_EB)
 void Vidyut::interpolate_fields_ib(
     Vector<MultiFab>& Sborder, int startcomp, int numcomp)
 {

@@ -66,6 +66,8 @@ void Vidyut::Evolve()
         PrintToFile(intcurrentfilename) << "\n";
     }
 
+    check_ib_cf_clearance();
+
     for (int step = istep[0]; step < max_step && cur_time < stop_time; ++step)
     {
         amrex::Real strt_time = amrex::second();
@@ -120,6 +122,7 @@ void Vidyut::Evolve()
                     amrex::Print() << "regridding\n";
                 }
                 regrid(0, cur_time);
+                check_ib_cf_clearance();
             }
         }
 

@@ -1,4 +1,4 @@
-VIDYUT_DIR = ../../vidyut3d
+VIDYUT_DIR ?= ../../../
 
 PRECISION  = DOUBLE
 PROFILE    = FALSE

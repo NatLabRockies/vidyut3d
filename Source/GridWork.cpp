@@ -12,6 +12,258 @@
 #include <Vidyut.H>
 #include <Chemistry.H>
 
+// Split the state into contiguous runs of solution and geometry components.
+// The geometry components are the IB cell mask and, when EB is on, the
+// boundary centroids and normals it carries along with it.
+Vector<Vidyut::CompRange> Vidyut::comp_ranges() const
+{
+    auto is_geometry = [](int c) {
+#ifdef AMREX_USE_EB
+        return (c == CMASK_ID) || (c >= CPX_ID && c <= NZ_ID);
+#else
+        return (c == CMASK_ID);
+#endif
+    };
+
+    Vector<CompRange> ranges;
+    int start = 0;
+    for (int c = 1; c <= NVAR; c++)
+    {
+        if (c == NVAR || is_geometry(c) != is_geometry(start))
+        {
+            ranges.push_back({start, c - start, is_geometry(start)});
+            start = c;
+        }
+    }
+    return ranges;
+}
+
+// Recompute a level's geometry components from the geometry itself. A level
+// that has just been built or rebuilt by regridding has those components
+// filled by interpolation from the coarse level, which is meaningless for a
+// volume fraction and worse than meaningless for a normal vector.
+void Vidyut::rebuild_level_geometry(
+    int lev,
+    const BoxArray& ba,
+    const DistributionMapping& dm,
+    bool preserve_solution)
+{
+#ifdef AMREX_USE_EB
+    // EB rebuilds the index space from the level's own Geometry, so the
+    // boundary is resolved at this level's dx rather than inherited from the
+    // coarse level. That sharpening is the whole point of refining here.
+    if (h_prob_parm->enable_EB)
+    {
+        // A case's initdomaindata_eb is free to write solution components as
+        // well as geometry, and several do: the Laplace cases set the
+        // densities and the electron temperature there. On a fresh level that
+        // is the intended initial condition. After a regrid it is not - the
+        // solution has just been interpolated from the coarse level or copied
+        // from the old grids, and overwriting it would silently discard the
+        // time-evolved state every time the hierarchy changed. Keep the
+        // non-geometry components across the call in that case.
+        MultiFab saved;
+        const int ncomp = phi_new[lev].nComp();
+        const int nghost = phi_new[lev].nGrow();
+        if (preserve_solution)
+        {
+            saved.define(ba, dm, ncomp, nghost);
+            MultiFab::Copy(saved, phi_new[lev], 0, 0, ncomp, nghost);
+        }
+
+        init_level_with_eb(ba, dm, geom[lev], phi_new[lev], d_prob_parm);
+
+        if (preserve_solution)
+        {
+            // Restore the old values only where the cell was ALREADY fluid.
+            //
+            // A cell that the coarse level saw as solid carries the decoupled
+            // row's value there, normally zero, and FillPatch/FillCoarsePatch
+            // hands that straight down. When the finer level resolves fluid
+            // that the coarse mask did not have - which is the whole point of
+            // refining across a gap narrower than a coarse cell - restoring it
+            // would write that zero into a cell that is now part of the
+            // solution. Those cells keep what init_level_with_eb just gave
+            // them, which is the case's own initialisation, and the solve
+            // takes it from there.
+            //
+            // The test uses the PRE-rebuild mask, held in `saved`. Geometry
+            // components are injected rather than interpolated (see
+            // comp_ranges), so a fine cell under a solid coarse cell has
+            // exactly 0 there and the comparison is clean.
+            auto ranges = comp_ranges();
+            for (const auto& r : ranges)
+            {
+                if (r.is_geometry) continue;
+                const int sc = r.scomp;
+                const int ec = r.scomp + r.ncomp;
+                auto const& sv = saved.const_arrays();
+                auto const& ph = phi_new[lev].arrays();
+                amrex::ParallelFor(
+                    phi_new[lev], amrex::IntVect(nghost),
+                    [=] AMREX_GPU_DEVICE(
+                        int nbx, int i, int j, int k) noexcept {
+                        if (int(sv[nbx](i, j, k, CMASK_ID)) != 1) return;
+                        for (int n = sc; n < ec; n++)
+                        {
+                            ph[nbx](i, j, k, n) = sv[nbx](i, j, k, n);
+                        }
+                    });
+            }
+            amrex::Gpu::streamSynchronize();
+
+            // A cell that was solid and is now fluid has no usable value
+            // yet. The restore above deliberately skipped it, and
+            // init_level_with_eb cannot be relied on to have supplied one:
+            // writing solution components there is not part of the callback's
+            // contract and several cases, MMS2_Axisym_EB among them, write
+            // only the mask, the centroids and the normals. Left alone the
+            // cell would keep the coarse identity-row value, normally zero.
+            //
+            // Extend the solution into those cells by repeatedly averaging
+            // over the face neighbours that already hold one.
+            //
+            // Three states, and the distinction matters. A solid cell must
+            // neither ask for a value nor give one: it holds the decoupled
+            // row's zero, and where a gap is hidden by the coarse mask the
+            // solid neighbours can be the only ones available, so treating
+            // them as donors would fill the new cell with exactly the zeros
+            // this is meant to remove.
+            constexpr int ST_SOLID = -1; // no value, never a donor
+            constexpr int ST_NEEDS = 0;  // newly fluid, wants a value
+            constexpr int ST_HAS = 1;    // fluid all along, can donate
+
+            // One ghost layer is required: the sweep reads face neighbours,
+            // and the state carries nghost = 0 on both regrid paths, since
+            // level 0 is built with none and the finer levels inherit that.
+            // Physical-boundary ghosts stay ST_SOLID, so they never donate;
+            // FillBoundary supplies the internal and periodic ones.
+            const int ngf = 1;
+            iMultiFab cellstate(ba, dm, 1, ngf);
+            cellstate.setVal(ST_SOLID);
+            {
+                auto const& ph = phi_new[lev].const_arrays();
+                auto const& sv = saved.const_arrays();
+                auto const& st = cellstate.arrays();
+                amrex::ParallelFor(
+                    cellstate, [=] AMREX_GPU_DEVICE(
+                                   int nbx, int i, int j, int k) noexcept {
+                        if (int(ph[nbx](i, j, k, CMASK_ID)) != 1)
+                        {
+                            st[nbx](i, j, k) = ST_SOLID;
+                        } else
+                        {
+                            st[nbx](i, j, k) =
+                                (int(sv[nbx](i, j, k, CMASK_ID)) == 1)
+                                    ? ST_HAS
+                                    : ST_NEEDS;
+                        }
+                    });
+                amrex::Gpu::streamSynchronize();
+            }
+
+            auto rr = comp_ranges();
+            amrex::Gpu::DeviceVector<CompRange> d_rr(rr.size());
+            amrex::Gpu::copyAsync(
+                amrex::Gpu::hostToDevice, rr.begin(), rr.end(), d_rr.begin());
+            amrex::Gpu::streamSynchronize();
+            const CompRange* rp = d_rr.data();
+            const int nr = static_cast<int>(rr.size());
+
+            // Sweep until nothing is left to fill rather than a fixed number
+            // of times: the width of a newly fluid region is not bounded by
+            // anything the caller controls, and a cell left unfilled would
+            // keep the coarse zero, which is the defect this exists to
+            // remove. The cap only stops an infinite loop if a region has no
+            // fluid neighbour at all, in which case there is nothing that
+            // could fill it.
+            constexpr int max_sweeps = 32;
+            MultiFab phisnap(ba, dm, ncomp, ngf);
+            iMultiFab stsnap(ba, dm, 1, ngf);
+            for (int sweep = 0; sweep < max_sweeps; sweep++)
+            {
+                amrex::Long nneed = amrex::ReduceSum(
+                    cellstate, 0,
+                    [=] AMREX_GPU_HOST_DEVICE(
+                        amrex::Box const& bx,
+                        amrex::Array4<int const> const& st) -> amrex::Long {
+                        amrex::Long n = 0;
+                        amrex::Loop(bx, [=, &n](int i, int j, int k) noexcept {
+                            if (st(i, j, k) == ST_NEEDS) n++;
+                        });
+                        return n;
+                    });
+                amrex::ParallelDescriptor::ReduceLongSum(nneed);
+                if (nneed == 0) break;
+                if (sweep == max_sweeps - 1)
+                {
+                    amrex::Print()
+                        << "WARNING: " << nneed
+                        << " cell(s) became fluid on level " << lev
+                        << " at this regrid and have no fluid neighbour to "
+                           "take a value from; they keep the value they had\n";
+                }
+                MultiFab::Copy(phisnap, phi_new[lev], 0, 0, ncomp, 0);
+                amrex::iMultiFab::Copy(stsnap, cellstate, 0, 0, 1, 0);
+                phisnap.FillBoundary(geom[lev].periodicity());
+                stsnap.FillBoundary(geom[lev].periodicity());
+
+                auto const& pin = phisnap.const_arrays();
+                auto const& sin = stsnap.const_arrays();
+                auto const& pout = phi_new[lev].arrays();
+                auto const& sout = cellstate.arrays();
+                amrex::ParallelFor(
+                    cellstate, [=] AMREX_GPU_DEVICE(
+                                   int nbx, int i, int j, int k) noexcept {
+                        if (sin[nbx](i, j, k) != ST_NEEDS) return;
+                        int cnt = 0;
+                        AMREX_D_TERM(
+                            cnt += (sin[nbx](i - 1, j, k) == ST_HAS) +
+                                   (sin[nbx](i + 1, j, k) == ST_HAS);
+                            , cnt += (sin[nbx](i, j - 1, k) == ST_HAS) +
+                                     (sin[nbx](i, j + 1, k) == ST_HAS);
+                            , cnt += (sin[nbx](i, j, k - 1) == ST_HAS) +
+                                     (sin[nbx](i, j, k + 1) == ST_HAS);)
+                        if (cnt == 0) return;
+                        for (int r = 0; r < nr; r++)
+                        {
+                            if (rp[r].is_geometry) continue;
+                            for (int n = rp[r].scomp;
+                                 n < rp[r].scomp + rp[r].ncomp; n++)
+                            {
+                                amrex::Real acc = 0.0;
+                                AMREX_D_TERM(
+                                    if (sin[nbx](i - 1, j, k) == ST_HAS) acc +=
+                                    pin[nbx](i - 1, j, k, n);
+                                    if (sin[nbx](i + 1, j, k) == ST_HAS) acc +=
+                                    pin[nbx](i + 1, j, k, n);
+                                    , if (sin[nbx](i, j - 1, k) == ST_HAS)
+                                          acc += pin[nbx](i, j - 1, k, n);
+                                    if (sin[nbx](i, j + 1, k) == ST_HAS) acc +=
+                                    pin[nbx](i, j + 1, k, n);
+                                    , if (sin[nbx](i, j, k - 1) == ST_HAS)
+                                          acc += pin[nbx](i, j, k - 1, n);
+                                    if (sin[nbx](i, j, k + 1) == ST_HAS) acc +=
+                                    pin[nbx](i, j, k + 1, n);)
+                                pout[nbx](i, j, k, n) = acc / cnt;
+                            }
+                        }
+                        sout[nbx](i, j, k) = ST_HAS;
+                    });
+                amrex::Gpu::streamSynchronize();
+            }
+        }
+    }
+#else
+    // Without EB there is no per-level geometry to rebuild from: the mask is
+    // written by initdomaindata, which would clobber the solution. The mask
+    // was injected rather than interpolated (see comp_ranges), so it stays a
+    // valid 0/1 field, but it is the coarse level's staircase, not a sharper
+    // boundary. Use an EB case if you want refinement to improve the geometry.
+    amrex::ignore_unused(lev, ba, dm);
+#endif
+}
+
 // Make a new level using provided BoxArray and DistributionMapping and
 // fill with interpolated coarse level data.
 // overrides the pure virtual function in AmrCore
@@ -29,6 +281,8 @@ void Vidyut::MakeNewLevelFromCoarse(
     t_old[lev] = time - 1.e200;
 
     FillCoarsePatch(lev, time, phi_new[lev], 0, ncomp);
+
+    rebuild_level_geometry(lev, ba, dm, /*preserve_solution=*/true);
 }
 
 // Remake an existing level using provided BoxArray and DistributionMapping and
@@ -51,6 +305,8 @@ void Vidyut::RemakeLevel(
 
     t_new[lev] = time;
     t_old[lev] = time - 1.e200;
+
+    rebuild_level_geometry(lev, ba, dm, /*preserve_solution=*/true);
 }
 
 // Delete level data
@@ -85,14 +341,6 @@ void Vidyut::MakeNewLevelFromScratch(
     // Problem parameters on device were initialized in amrex_probinit(...)
     ProbParm* localprobparm = d_prob_parm;
 
-#ifdef AMREX_USE_EB
-    // Conditionally build EB depending on user request in d_prob_parm
-    if (localprobparm->enable_EB)
-    {
-        // User requested EB: build EB and initialize masks from EB vfrac
-        init_level_with_eb(ba, dm, geom[lev], state, localprobparm);
-    }
-#endif
     for (MFIter mfi(state); mfi.isValid(); ++mfi)
     {
         Array4<Real> fab = state[mfi].array();
@@ -103,6 +351,10 @@ void Vidyut::MakeNewLevelFromScratch(
             initdomaindata(tbx, fab, geomData, localprobparm);
         });
     }
+    // Conditionally build EB depending on user request in the ProbParm.
+    // Same call as after a regrid, so a level has the same geometry however
+    // it came into existence.
+    rebuild_level_geometry(lev, ba, dm);
 
     // copy new -> old
     amrex::MultiFab::Copy(phi_old[lev], phi_new[lev], 0, 0, ncomp, 0);
@@ -114,9 +366,7 @@ void Vidyut::AverageDown()
     BL_PROFILE("vidyut::AverageDown()");
     for (int lev = finest_level - 1; lev >= 0; --lev)
     {
-        amrex::average_down(
-            phi_new[lev + 1], phi_new[lev], geom[lev + 1], geom[lev], 0,
-            phi_new[lev].nComp(), refRatio(lev));
+        AverageDownTo(lev);
     }
 }
 
@@ -124,9 +374,18 @@ void Vidyut::AverageDown()
 // multiple levels
 void Vidyut::AverageDownTo(int crse_lev)
 {
-    amrex::average_down(
-        phi_new[crse_lev + 1], phi_new[crse_lev], geom[crse_lev + 1],
-        geom[crse_lev], 0, phi_new[crse_lev].nComp(), refRatio(crse_lev));
+    // Geometry components are skipped: the coarse level already holds the
+    // mask, centroids and normals of its own dx, and averaging the fine
+    // level's into them turns unit normals into short ones and drags cells
+    // that are wholly fluid at the coarse dx below the mask cutoff.
+    for (const auto& r : comp_ranges())
+    {
+        if (r.is_geometry) continue;
+
+        amrex::average_down(
+            phi_new[crse_lev + 1], phi_new[crse_lev], geom[crse_lev + 1],
+            geom[crse_lev], r.scomp, r.ncomp, refRatio(crse_lev));
+    }
 }
 
 // compute a new multifab by coping in phi from valid region and filling ghost
@@ -157,18 +416,34 @@ void Vidyut::FillPatch(int lev, Real time, MultiFab& mf, int icomp, int ncomp)
         GetData(lev - 1, time, cmf, ctime);
         GetData(lev, time, fmf, ftime);
 
-        Interpolater* mapper = &cell_cons_interp;
-
         GpuBndryFuncFab<AmrCoreFill> gpu_bndry_func(amrcore_fill_func);
         PhysBCFunct<GpuBndryFuncFab<AmrCoreFill>> cphysbc(
             geom[lev - 1], bcspec, gpu_bndry_func);
         PhysBCFunct<GpuBndryFuncFab<AmrCoreFill>> fphysbc(
             geom[lev], bcspec, gpu_bndry_func);
 
-        amrex::FillPatchTwoLevels(
-            mf, time, cmf, ctime, fmf, ftime, 0, icomp, ncomp, geom[lev - 1],
-            geom[lev], cphysbc, 0, fphysbc, 0, refRatio(lev - 1), mapper,
-            bcspec, 0);
+        // Solution components are interpolated; geometry components are
+        // injected, so a fine ghost cell inherits its covering coarse cell's
+        // mask exactly instead of a conservative blend of it and its
+        // neighbours, which would put fractional values into what the IB
+        // code reads as a 0/1 flag.
+        for (const auto& r : comp_ranges())
+        {
+            if (r.scomp + r.ncomp <= icomp || r.scomp >= icomp + ncomp)
+                continue;
+
+            const int scomp = amrex::max(r.scomp, icomp);
+            const int ecomp = amrex::min(r.scomp + r.ncomp, icomp + ncomp);
+
+            Interpolater* mapper = r.is_geometry
+                                       ? (Interpolater*)&pc_interp
+                                       : (Interpolater*)&cell_cons_interp;
+
+            amrex::FillPatchTwoLevels(
+                mf, time, cmf, ctime, fmf, ftime, scomp, scomp, ecomp - scomp,
+                geom[lev - 1], geom[lev], cphysbc, scomp, fphysbc, scomp,
+                refRatio(lev - 1), mapper, bcspec, scomp);
+        }
     }
 }
 
@@ -184,8 +459,6 @@ void Vidyut::FillCoarsePatch(
     Vector<Real> ctime;
     GetData(lev - 1, time, cmf, ctime);
 
-    Interpolater* mapper = &cell_cons_interp;
-
     if (cmf.size() != 1)
     {
         amrex::Abort("FillCoarsePatch: how did this happen?");
@@ -197,7 +470,23 @@ void Vidyut::FillCoarsePatch(
     PhysBCFunct<GpuBndryFuncFab<AmrCoreFill>> fphysbc(
         geom[lev], bcspec, gpu_bndry_func);
 
-    amrex::InterpFromCoarseLevel(
-        mf, time, *cmf[0], 0, icomp, ncomp, geom[lev - 1], geom[lev], cphysbc,
-        0, fphysbc, 0, refRatio(lev - 1), mapper, bcspec, 0);
+    // Geometry components are injected rather than interpolated. For an EB
+    // case they are overwritten straight after by rebuild_level_geometry();
+    // filling them here anyway keeps the state fully defined for the cases
+    // that have no geometry to rebuild from.
+    for (const auto& r : comp_ranges())
+    {
+        if (r.scomp + r.ncomp <= icomp || r.scomp >= icomp + ncomp) continue;
+
+        const int scomp = amrex::max(r.scomp, icomp);
+        const int ecomp = amrex::min(r.scomp + r.ncomp, icomp + ncomp);
+
+        Interpolater* mapper = r.is_geometry ? (Interpolater*)&pc_interp
+                                             : (Interpolater*)&cell_cons_interp;
+
+        amrex::InterpFromCoarseLevel(
+            mf, time, *cmf[0], scomp, scomp, ecomp - scomp, geom[lev - 1],
+            geom[lev], cphysbc, scomp, fphysbc, scomp, refRatio(lev - 1),
+            mapper, bcspec, scomp);
+    }
 }

@@ -3,6 +3,13 @@ stop_time = 1000
 
 # PROBLEM SIZE & GEOMETRY
 geometry.is_periodic =  0 0
+# NOTE: this case is CARTESIAN despite the "Axisym" in its directory
+# name, which is inherited from an axisymmetric ancestor. coord_sys = 0
+# below is deliberate and the manufactured source in UserSources.H is
+# derived with Cartesian operators to match: the radial Laplacian of a
+# function of r = sqrt(x^2+y^2) is f'' + f'/r in two Cartesian
+# dimensions just as it is in RZ, so a 1/r term there is not evidence
+# of axisymmetry. Set coord_sys = 1 only with a source re-derived for it.
 geometry.coord_sys   =  0       # 0 => cart, 1 => RZ (axisymmetric)
 geometry.prob_lo     =  -3     -3
 geometry.prob_hi     =   3      3
