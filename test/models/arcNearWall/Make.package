@@ -1,0 +1,5 @@
+CEXE_headers += Prob.H UserFunctions.H Chemistry.H UserSources.H ProbParm.H
+CEXE_sources += Chemistry.cpp
+
+#f90EXE_sources += face_velocity_$(DIM)d.f90
+#f90EXE_source += Prob.f90

@@ -1,0 +1,10 @@
+#!/bin/bash
+#SBATCH --nodes=1            
+#SBATCH --ntasks-per-node=32      
+#SBATCH --time=96:00:00             
+#SBATCH --account=<accnt>
+#SBATCH --job-name=90pTw
+#SBATCH --output=job_output_filename.%j.out  # %j will be replaced with the job ID
+#SBATCH --partition=long
+
+srun -n 32 ./*.ex inputs1d
