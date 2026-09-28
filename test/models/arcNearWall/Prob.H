@@ -157,8 +157,6 @@ void initdomaindata(
 
             for (int i = lo.x; i <= hi.x; ++i)
             {
-                Real z = prob_lo[2] + (0.5 + k) * dx[2];
-                Real y = prob_lo[1] + (0.5 + j) * dx[1];
                 Real x = prob_lo[0] + (0.5 + i) * dx[0];
 
                 int chrgspec[NUM_SPECIES] = {0};
