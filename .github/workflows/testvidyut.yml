@@ -36,7 +36,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends \
-        build-essential g++ gfortran libopenmpi-dev openmpi-bin
+        build-essential g++ gfortran libopenmpi-dev openmpi-bin python3-numpy
     - name: Install Ccache
       run: |
         wget https://github.com/ccache/ccache/releases/download/v4.8/ccache-4.8-linux-x86_64.tar.xz
@@ -131,6 +131,25 @@ jobs:
         mpirun -n 2 ./*.ex inputs2d amrex.fpe_trap_invalid=1 amrex.fpe_trap_zero=1 amrex.fpe_trap_overflow=1 amrex.init_snan=1
         ../../../Submodules/amrex/Tools/Plotfile/fextrema*.ex -v Potential plt00001 | tee extrema.txt
         python3 check_bounds.py extrema.txt
+    - name: Build MMS2 EB Case
+      working-directory: ./test/verification/MMS2_Axisym_EB/
+      run: |
+        ccache -z
+        make -j 2 USE_CCACHE=TRUE COMP=gnu USE_EB=TRUE
+        ccache -s
+    - name: Run MMS2 EB Joule Case
+      # Electron energy scaled so the Joule term is of the same order as the
+      # energy transport; second order only with the correct Joule sign.
+      working-directory: ./test/verification/MMS2_Axisym_EB/
+      run: |
+        for N in 32 64; do
+          mkdir -p j$N
+          (cd j$N && mpirun -n 2 ../*.ex ../inputs2d_joule amr.n_cell=$N $N 1 \
+            amrex.fpe_trap_invalid=1 amrex.fpe_trap_zero=1 amrex.fpe_trap_overflow=1 amrex.init_snan=1 \
+            > log 2>&1) || { cat j$N/log; exit 1; }
+        done
+        python3 check_errors.py j32/plt00001 j64/plt00001 --deck inputs2d_joule \
+          --min-order 1.8 --fields rel_Electron_energy rel_Te
     - name: Checkout Reference Version
       if: env.DO_REF_COMPARE == 'true'
       run : |

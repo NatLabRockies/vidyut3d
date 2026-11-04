@@ -93,13 +93,25 @@ AMREX_GPU_DEVICE AMREX_INLINE void add_user_react_sources(
 
     // ---- Electron energy: advection + diffusion + Joule (NO reaction,
     //      NO elastic loss -- chemistry disabled) ----
+    // Manufactured E_e = een_scale * n_e, so Gamma_eps = (5/3)(mu_e E_e E -
+    // De grad E_e) is een_scale times the (5/3) electron flux and
+    //   term1 = div(Gamma_eps).
+    // The solver advances
+    //   dE_e/dt = -div(Gamma_eps) + q Gamma_e . E + S,   q = -e,
+    // with q Gamma_e . E added in ElecEnergySource.cpp (elec_jheat, charge =
+    // get_charge(E) * ECHARGE), so at steady state
+    //   S = div(Gamma_eps) + e Gamma_e . E.
+    // term2 = +e Gamma_e . E. (It was -e Gamma_e . E until 2026-11-03; with
+    // een_scale = 1 that term is ~1e-19 of term1, so no error changed.)
+    const amrex::Real een_scale = prob_parm.een_scale;
     const amrex::Real term1 =
-        -5.0 / 3.0 * (mue * (gradne_dot_gp + ne * lapphi) + De * lapne);
+        -een_scale * 5.0 / 3.0 *
+        (mue * (gradne_dot_gp + ne * lapphi) + De * lapne);
 
     const amrex::Real E_mag_sq = r6 / 64.0;          // |grad phi|^2
     const amrex::Real gradne_dot_E = -gradne_dot_gp; // grad n_e . E
     const amrex::Real term2 =
-        -ECHARGE * (mue * ne * E_mag_sq - De * gradne_dot_E);
+        ECHARGE * (mue * ne * E_mag_sq - De * gradne_dot_E);
 
     rxnsrc(i, j, k, EEN_ID) += term1 + term2;
 }
@@ -157,14 +169,17 @@ AMREX_GPU_DEVICE AMREX_INLINE void add_user_react_sources(
     rxnsrc(i, j, k, HEp_ID) -=
         mui * (gradni_dot_gp + ni * lapphi) + Di * lapni + Rrate;
 
+    // NOTE: this version predates prob.een_scale and assumes E_e = n_e;
+    // scale term1 (and Te_solved's meaning) before using een_scale != 1.
     const amrex::Real term1 =
         -5.0 / 3.0 *
         (mue * (gradne_dot_gp + ne * lapphi) + De * lapne);
 
     const amrex::Real E_mag_sq     = r6 / 64.0;
     const amrex::Real gradne_dot_E = -gradne_dot_gp;
+    // +e Gamma_e . E: see the sign note in the active version above.
     const amrex::Real term2 =
-        -ECHARGE * (mue * ne * E_mag_sq - De * gradne_dot_E);
+        ECHARGE * (mue * ne * E_mag_sq - De * gradne_dot_E);
 
     const amrex::Real nu = 10000.0;
     const amrex::Real term3 =

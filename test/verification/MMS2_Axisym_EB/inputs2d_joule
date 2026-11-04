@@ -1,0 +1,154 @@
+# MMS2 annulus with a Joule-heating-sensitive electron energy.
+#
+# Same case as inputs2d except for the manufactured electron energy density.
+# inputs2d uses E_e = n_e, which corresponds to Te of order 1e18 eV; there the
+# Joule term e Gamma_e . E is about 1e-19 of the energy transport terms and a
+# wrong sign or a missing Joule term changes no error digit.
+#
+# Here E_e = prob.een_scale * n_e with een_scale = 1.5 e Te0 and Te0 = 0.1 V,
+# so Te = (2/3) een_scale / k_B = 1160.45 K everywhere. The ratio
+# |e Gamma_e . E| / |div Gamma_eps| then ranges from 0.016 at r = 0.5 to
+# about 19 at r = 1.5, where div Gamma_eps tends to zero (README.md), and Te
+# is backed out of E_e / n_e as in
+# production (freeze_etemp = 0), so the back-out is checked as well.
+#
+# Run in j32/, j64/, ... (32/, 64/ hold the inputs2d paper runs of run.sh):
+#   mkdir -p j64 && cd j64 && mpirun -np 1 ../*.ex ../inputs2d_joule amr.n_cell=64 64 1
+#   python3 check_errors.py j32/plt00001 j64/plt00001 --deck inputs2d_joule
+
+# ---- identical to inputs2d from here to the Joule block ----
+max_step  = 720
+stop_time = 1000
+
+# PROBLEM SIZE & GEOMETRY
+geometry.is_periodic =  0 0 
+# NOTE: this case is CARTESIAN despite the "Axisym" in its directory
+# name, which is inherited from an axisymmetric ancestor. coord_sys = 0
+# below is deliberate and the manufactured source in UserSources.H is
+# derived with Cartesian operators to match: the radial Laplacian of a
+# function of r = sqrt(x^2+y^2) is f'' + f'/r in two Cartesian
+# dimensions just as it is in RZ, so a 1/r term there is not evidence
+# of axisymmetry. Set coord_sys = 1 only with a source re-derived for it.
+geometry.coord_sys   =  0       # 0 => cart, 1 => RZ (axisymmetric)
+geometry.prob_lo     =  -3     -3
+geometry.prob_hi     =   3      3
+amr.n_cell           = 16 16 
+amr.blocking_factor = 2
+
+# EB
+eb2.geom_type = annulus
+eb2.inner_r = 0.5
+eb2.outer_r = 1.5
+eb2.center  = 0.0 0.0 0.0
+eb2.height  = 20.0
+eb2.axis    = 2          # axis of cylinder
+
+# VERBOSITY
+amr.v              = 1       # verbosity in Amr
+
+# RESTART
+# amr.restart = chk00020
+
+# REFINEMENT
+amr.max_level       = 0       # maximum level number allowed
+amr.blocking_factor = 16       # block factor in grid generation
+amr.max_grid_size   = 32
+
+amr.regrid_int      = 1       # how often to regrid
+
+# TIME STEP CONTROL
+vidyut.dt             = 0.01
+vidyut.hyp_order=5
+vidyut.num_timestep_correctors=1
+
+
+
+
+vidyut.user_defined_potential = 1
+vidyut.user_defined_species = 1
+vidyut.user_defined_vel = 1
+vidyut.using_ib=1
+
+vidyut.bound_specden=0
+vidyut.min_species_density=1e-11
+vidyut.min_electron_density=1e-11
+vidyut.min_electron_temp=1e-11
+vidyut.linsolve_maxiter=200
+vidyut.elecenergy_solve=1
+vidyut.bg_species_ids=1
+vidyut.gas_temperature=1e-50
+
+#0 - periodic
+#1 - Dirichlet
+#2 - Homogeneous Neumann
+#3 - Inhomogeneous Neumann
+#4 - Robin
+
+prob.inner_radius=0.5
+prob.outer_radius=1.5
+prob.inner_voltage=10.0
+prob.outer_voltage=20.0
+prob.a_inner_dir = 1.0
+prob.b_inner_neumann = 0.0
+prob.a_outer_dir = 1.0
+prob.b_outer_neumann = 0.0
+
+vidyut.pot_bc_lo = 4 4
+vidyut.pot_bc_hi = 4 4
+
+vidyut.eden_bc_lo = 1 1
+vidyut.eden_bc_hi = 1 1
+
+vidyut.eenrg_bc_lo = 1 1
+vidyut.eenrg_bc_hi = 1 1
+
+vidyut.ion_bc_lo = 1 1
+vidyut.ion_bc_hi = 1 1
+
+vidyut.neutral_bc_lo = 2 2
+vidyut.neutral_bc_hi = 2 2
+
+#vidyut.pot_bc_lo = 0 0
+#vidyut.pot_bc_hi = 0 0
+
+#vidyut.eden_bc_lo = 0 0
+#vidyut.eden_bc_hi = 0 0
+
+#vidyut.eenrg_bc_lo = 0 0
+#vidyut.eenrg_bc_hi = 0 0
+
+#vidyut.ion_bc_lo = 0 0
+#vidyut.ion_bc_hi = 0 0
+
+#vidyut.neutral_bc_lo = 0 0
+#vidyut.neutral_bc_hi = 0 0
+
+# PLOTFILES
+amr.plot_file  = plt    # root name of plot file
+amr.plot_int   = 1000     # number of timesteps between plot files
+
+# CHECKPOINT
+amr.chk_file = chk      # root name of checkpoint file
+amr.chk_int  = 1000      # number of timesteps between checkpoint files
+
+vidyut.linsolve_reltol = 1.0e-12
+vidyut.linsolve_abstol = 1.0e-14
+vidyut.linsolve_maxiter = 1000
+
+# ---- Joule block: differs from inputs2d ----
+
+# 1.5 * 1.602176634e-19 * 0.1
+prob.een_scale = 2.403264951e-20
+
+# The energy equation is solved for E_e / elecenergy_scale, so the linear
+# solver sees an O(n_e) unknown and the absolute tolerance keeps its meaning.
+vidyut.elecenergy_scale = 2.403264951e-20
+
+# Back Te out of E_e / n_e. Transport coefficients in Chemistry.H do not
+# depend on Te, so this does not change the manufactured source.
+vidyut.freeze_etemp = 0
+
+# Gamma_e . E > 0 in this annulus (diffusion against the field dominates),
+# so the Joule term q Gamma_e . E is negative. floor_jh = 1 would clip it to
+# zero; keep it off so the term is tested. 0 is also the default.
+vidyut.floor_jh = 0
