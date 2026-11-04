@@ -1,0 +1,127 @@
+max_step  = 20000000
+stop_time = 21000.0e-9
+
+# PROBLEM SIZE & GEOMETRY
+geometry.is_periodic =  0  0  0
+geometry.coord_sys   =  0       # 0 => cart (3D Cartesian, pin axis = z)
+geometry.prob_lo     = -4e-3 -4e-3  0.0
+geometry.prob_hi     =  4e-3  4e-3  8e-3
+amr.n_cell           =  256 256 256   # 31.25 um, same grid as the 3D single-pin run
+
+# VERBOSITY
+amr.v              = 1       # verbosity in Amr
+
+# REFINEMENT
+amr.max_level       = 0       # maximum level number allowed
+amr.blocking_factor = 8       # block factor in grid generation
+amr.max_grid_size   = 32
+
+amr.regrid_int      = 5       # how often to regrid
+
+# TIME STEP CONTROL
+vidyut.dt             = 1e-12
+#vidyut.adaptive_dt    = 1
+#vidyut.advective_cfl  = 0.3
+#vidyut.diffusive_cfl  = 10.0
+#vidyut.dielectric_cfl = 10.0
+vidyut.num_timestep_correctors = 1
+vidyut.hyp_order = 1
+vidyut.electron_poisson_coupling=1
+vidyut.electron_poisson_maxiters=3
+
+vidyut.user_defined_potential = 1
+vidyut.user_defined_species = 1
+vidyut.user_defined_vel = 1
+
+# Tagging
+vidyut.tagged_vars = Potential ReducedEF E
+vidyut.Potential_refine = 1e20
+vidyut.Potential_refinegrad = 400.0
+vidyut.ReducedEF_refine = 1000.0
+vidyut.ReducedEF_refinegrad = 5.0
+vidyut.E_refine = 5e19
+vidyut.E_refinegrad = 5e17
+
+
+#0 - periodic
+#1 - Dirichlet
+#2 - Homogeneous Neumann
+#3 - Inhomogeneous Neumann
+#4 - Robin
+#5 - axis
+
+vidyut.pot_bc_lo = 2 2 2
+vidyut.pot_bc_hi = 2 2 2
+
+vidyut.eden_bc_lo = 2 2 2
+vidyut.eden_bc_hi = 2 2 2
+
+vidyut.eenrg_bc_lo = 2 2 2
+vidyut.eenrg_bc_hi = 2 2 2
+
+vidyut.ion_bc_lo = 2 2 2
+vidyut.ion_bc_hi = 2 2 2
+
+vidyut.neutral_bc_lo = 2 2 2
+vidyut.neutral_bc_hi = 2 2 2
+
+# PLOTFILES
+amr.plot_file  = plt_sR06_    # root name of plot file
+amr.plot_int   = 500   # number of timesteps between plot files
+
+# CHECKPOINT
+amr.chk_file = chk_sR06_      # root name of checkpoint file
+amr.chk_int  = 50000       # number of timesteps between checkpoint files
+
+vidyut.bound_specden=1
+vidyut.min_species_density=1e8
+vidyut.min_electron_density=1e8
+vidyut.linsolve_maxiter=1000
+#vidyut.linsolve_reltol=1e-9
+vidyut.bg_species_ids=1
+vidyut.elecenergy_solve=0
+vidyut.using_LFA=1
+vidyut.track_surf_charge=1
+vidyut.using_ib=1
+vidyut.use_hypre=1
+vidyut.linsolve_max_coarsening_level=0
+# With an immersed boundary the cell mask is not coarsenable across the curved
+# electrodes, so MLMG has ONE level and the bottom solver does all the work.
+# With hypre (USE_HYPRE=TRUE, use_hypre=1) that is a hypre solve of the whole
+# system. Without hypre the bottom solver is BiCGStab, whose AMReX defaults
+# (200 iterations, rel. tol. 1e-4) fail on the 400x800 RZ grid; these let it
+# run to convergence (about 1600 iterations per potential solve).
+vidyut.linsolve_bottom_maxiter=20000
+vidyut.linsolve_bottom_reltol=1e-8
+
+vidyut.multicompsolves=0
+# PROB SPECIFIC
+vidyut.gas_pressure=13300.0
+vidyut.gas_temperature=673.0
+prob.V1=600.0
+prob.tpulse=500.0e-9
+prob.ramptime=1e-10
+prob.seedionden=1e13
+prob.pinrad=0.8e-3          # both pins, tip radius of curvature 0.16 mm
+prob.dgap=4e-3
+
+# IB geometry (AMReX EB2, see Prob.H / PinGeom.H)
+prob.eb_geom_method = 4        # 4 scaled quadric + Newton (default), 3 analytical paraboloid, 5 nearest cut cell
+prob.eb_quadric_offset = 1
+prob.sharp_interface_scheme = 1
+prob.perface_fallback = 1
+prob.d_floor_frac = 0.5
+prob.wall_extrap = 1           # linear extrapolation of the wall state (paper runs)
+
+# Pin arrays (PinGeom.H): bottom = powered, top = grounded. Defaults below give
+# the single pin on the axis. Centres are transverse coordinates (x in 2D;
+# x y in 3D), radii at the domain face (1 value for all pins or one per pin).
+# 2x2 spacing study: four powered pins at the corners of a square of side
+# s = 6 R = 0.96 mm (R = 0.16 mm tip radius of the powered pins),
+# one grounded pin on the axis, same r_p = 0.8 mm as the single-pin runs
+# (inputs2d_r0p8, inputs3d_r0p8), which are the isolated-pin reference.
+# NOTE: s < 2 r_p, the powered pins overlap below 0.72 mm from the tips (union).
+prob.nbot = 4
+prob.ntop = 1
+prob.bot_centers = -4.8000e-04 -4.8000e-04   4.8000e-04 -4.8000e-04   -4.8000e-04 4.8000e-04   4.8000e-04 4.8000e-04
+prob.top_centers = 0.0 0.0
