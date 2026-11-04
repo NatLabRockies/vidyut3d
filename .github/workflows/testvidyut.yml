@@ -128,7 +128,7 @@ jobs:
     - name: Run EB Case
       working-directory: ./test/verification/Laplace_2D_RobinBC_Test_EB/
       run: |
-        mpirun -n 2 ./*.ex inputs2d
+        mpirun -n 2 ./*.ex inputs2d amrex.fpe_trap_invalid=1 amrex.fpe_trap_zero=1 amrex.fpe_trap_overflow=1 amrex.init_snan=1
         ../../../Submodules/amrex/Tools/Plotfile/fextrema*.ex -v Potential plt00001 | tee extrema.txt
         python3 check_bounds.py extrema.txt
     - name: Build Trench Etch Case
