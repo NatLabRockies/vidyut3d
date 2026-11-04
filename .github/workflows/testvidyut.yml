@@ -131,6 +131,32 @@ jobs:
         mpirun -n 2 ./*.ex inputs2d
         ../../../Submodules/amrex/Tools/Plotfile/fextrema*.ex -v Potential plt00001 | tee extrema.txt
         python3 check_bounds.py extrema.txt
+    - name: Build Trench Etch Case
+      working-directory: ./test/verification/Laplace_2D_Trench_Etch/
+      run: |
+        ccache -z
+        make -j 2 USE_CCACHE=TRUE COMP=gnu USE_EB=TRUE
+        ccache -s
+    - name: Build fcompare for the Trench Etch Case
+      working-directory: ./Submodules/amrex/Tools/Plotfile
+      run: |
+        make -j 2 USE_CCACHE=TRUE COMP=gnu programs=fcompare
+    - name: Run Trench Etch Case
+      working-directory: ./test/verification/Laplace_2D_Trench_Etch/
+      run: |
+        set -o pipefail
+        # three mid-run geometry switches must reproduce a static run of the
+        # final trench (same grids, same cellmask, fields to 1e-12), and a
+        # restart between switches must reproduce the staged run exactly
+        mkdir -p staged final restart
+        grep -v geom_switch_steps inputs2d > final/inputs_static
+        (cd staged && mpirun -n 2 ../*.ex ../inputs2d amr.plot_int=16 amr.chk_int=6 | tee log)
+        (cd final && mpirun -n 2 ../*.ex inputs_static amr.plot_int=16 amr.chk_int=-1 eb2.etch_stages=0 eb2.trench_depth=5.2 eb2.trench_wbot=1.16)
+        (cd restart && mpirun -n 2 ../*.ex ../inputs2d amr.restart=../staged/chk00001 amr.plot_int=16 amr.chk_int=-1 | tee log)
+        # every cell that turns from solid to gas must be filled from its gas neighbours
+        if grep "no fluid neighbour" staged/log restart/log; then exit 1; fi
+        ../../../Submodules/amrex/Tools/Plotfile/fcompare*.ex -r 1e-12 final/plt00001 staged/plt00001
+        ../../../Submodules/amrex/Tools/Plotfile/fcompare*.ex staged/plt00001 restart/plt00001
     - name: Checkout Reference Version
       if: env.DO_REF_COMPARE == 'true'
       run : |
