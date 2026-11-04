@@ -595,8 +595,11 @@ void init_level_with_eb(
                                     S_bb += basis * basis;
                                     ++nq;
                                 }
-                            a_curv =
-                                (S_bb > 1e-30 && nq >= 2) ? (S_bw / S_bb) : 0.0;
+                            // Divide with safe operands: clang -O3 divides
+                            // before it selects, so S_bb = 0 would trap as 0/0.
+                            const Real S_bb_div = (S_bb > 1e-30) ? S_bb : 1.0;
+                            a_curv = ((S_bb > 1e-30 && nq >= 2) ? S_bw : 0.0) /
+                                     S_bb_div;
                         }
 #else
                     {
@@ -1435,8 +1438,14 @@ void init_level_with_eb(
                                                          Mq[1][1] * Mq[2][0]));
                             } else
                             {
-                                a_nd = (S_bb > 1e-20 && nq >= 2) ? (S_bw / S_bb)
-                                                                 : 0.0;
+                                // Divide with safe operands: clang -O3 divides
+                                // before it selects, so S_bb = 0 would trap as
+                                // 0/0.
+                                const Real S_bb_div =
+                                    (S_bb > 1e-20) ? S_bb : 1.0;
+                                a_nd =
+                                    ((S_bb > 1e-20 && nq >= 2) ? S_bw : 0.0) /
+                                    S_bb_div;
                             }
                         }
 #else
