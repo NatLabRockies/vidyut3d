@@ -139,17 +139,24 @@ amrex::Real get_applied_potential(
         voltage = sin(2.0 * PI * vfreq * current_time) * voltage_amp;
     } else if (vprof == 2)
     { // Single triangular pulse
+        // The compiler may compute the ratio below speculatively, before the
+        // branches that guard it. With the default vdur = 0 that is 0/0 and
+        // traps under amrex.fpe_trap_invalid. The pulse is zero for
+        // vdur <= 0, so any non-zero divisor gives the same voltage. The
+        // divisor is kept in double, as vdur / 2.0 was, so that a
+        // single-precision build divides exactly as before.
+        const double half_dur = (vdur / 2.0 > 0.0) ? vdur / 2.0 : 1.0;
         if (current_time <= vcen)
         {
             voltage =
                 (vcen - current_time < vdur / 2.0)
-                    ? (1.0 - (vcen - current_time) / (vdur / 2.0)) * voltage_amp
+                    ? (1.0 - (vcen - current_time) / half_dur) * voltage_amp
                     : 0.0;
         } else
         {
             voltage =
                 (current_time - vcen < vdur / 2.0)
-                    ? (1.0 - (current_time - vcen) / (vdur / 2.0)) * voltage_amp
+                    ? (1.0 - (current_time - vcen) / half_dur) * voltage_amp
                     : 0.0;
         }
     } else
