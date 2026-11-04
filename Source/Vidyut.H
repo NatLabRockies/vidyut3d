@@ -407,6 +407,20 @@ public:
     // Off by default, so an ordinary run backs Te out as it always has.
     int freeze_etemp = 0;
 
+    // Mid-run geometry change. Before each step listed in
+    // vidyut.geom_switch_steps (strictly increasing, >= 1; empty: never) the
+    // solver adds 1 to vidyut.geom_phase and rebuilds the geometry of every
+    // level. The case picks its shape from vidyut.geom_phase in
+    // init_level_with_eb; a case that ignores it sees no change. Cells that
+    // stay gas keep their solution, cells that turn from solid to gas are
+    // filled from their gas neighbours (rebuild_level_geometry with
+    // preserve_solution; on a finer level, cells the fill cannot reach are
+    // interpolated from the coarse level), then the hierarchy is averaged
+    // down and regridded. Needs an EB build and vidyut.using_ib = 1 (aborts
+    // otherwise). Each checkpoint stores vidyut.geom_phase (file GeomPhase)
+    // and a restart restores it.
+    amrex::Vector<int> geom_switch_steps;
+
     int using_ib = 0;
 
     // How the solid cells are kept out of the linear solve. Two ways exist
@@ -477,6 +491,10 @@ private:
         const amrex::BoxArray& ba,
         const amrex::DistributionMapping& dm,
         bool preserve_solution = false);
+
+    // vidyut.geom_switch_steps: rebuild every level's geometry, keep and fill
+    // the solution, regrid (see GridWork.cpp)
+    void change_geometry(amrex::Real time);
 
     // set covered coarse cells to be the average of overlying fine cells
     void AverageDown();

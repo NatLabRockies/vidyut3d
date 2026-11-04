@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <AMReX_ParallelDescriptor.H>
 #include <AMReX_ParmParse.H>
 #include <AMReX_MultiFabUtil.H>
@@ -73,6 +74,15 @@ void Vidyut::Evolve()
         amrex::Real strt_time = amrex::second();
         amrex::Print() << "\nCoarse STEP " << step + 1 << " starts ..."
                        << std::endl;
+
+        // at the top of the step, before phi_old is taken from phi_new, so
+        // no time interpolation ever mixes the two geometries
+        if (std::find(
+                geom_switch_steps.begin(), geom_switch_steps.end(), step) !=
+            geom_switch_steps.end())
+        {
+            change_geometry(cur_time);
+        }
 
         dt_edrift = std::numeric_limits<Real>::max();
         dt_diel_relax = std::numeric_limits<Real>::max();

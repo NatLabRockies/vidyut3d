@@ -51,6 +51,41 @@ amrex::Real get_onesided_grad(
     return (grad);
 }
 
+// get_onesided_grad at an immersed-boundary face, where the two cells behind
+// the gas cell may not both be gas. In a channel two gas cells wide
+// (solid|gas|gas|solid) ncell2 is a solid cell on the far side and holds the
+// decoupled row's value, so the extrapolation 2 grad1 - grad2 is
+// meaningless: use the two-point gradient grad1. In a channel one gas cell
+// wide even ncell1 is solid and there is no gas-side difference at all:
+// return 0.
+AMREX_GPU_HOST_DEVICE
+AMREX_FORCE_INLINE
+amrex::Real get_onesided_grad_ib(
+    IntVect face,
+    int sgn,
+    int idim,
+    int comp,
+    const GpuArray<Real, AMREX_SPACEDIM> dx,
+    Array4<Real> const sb_arr)
+{
+    IntVect cell = face;
+    cell[idim] += (sgn == 1) ? -1 : 0;
+    IntVect ncell1 = cell;
+    ncell1[idim] -= sgn;
+    IntVect ncell2 = ncell1;
+    ncell2[idim] -= sgn;
+
+    if (int(sb_arr(ncell1, CMASK_ID)) != 1)
+    {
+        return 0.0;
+    }
+    if (int(sb_arr(ncell2, CMASK_ID)) != 1)
+    {
+        return sgn * (sb_arr(cell, comp) - sb_arr(ncell1, comp)) / dx[idim];
+    }
+    return get_onesided_grad(face, sgn, idim, comp, dx, sb_arr);
+}
+
 AMREX_GPU_HOST_DEVICE
 AMREX_FORCE_INLINE
 amrex::Real get_efield_alongdir(

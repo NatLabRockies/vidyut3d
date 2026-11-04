@@ -12,6 +12,8 @@
 #include <PlasmaChem.H>
 #include <ProbParm.H>
 #include <stdio.h>
+#include <sstream>
+#include <string>
 #include <VarDefines.H>
 #include <UserFunctions.H>
 #include <HelperFuncs.H>
@@ -244,6 +246,52 @@ void Vidyut::InitData()
     {
         // restart from a checkpoint
         ReadCheckpointFile();
+
+        // vidyut.geom_phase picks the shape a later regrid or switch
+        // rebuilds, so it must match the geometry in the checkpoint. The
+        // checkpoint stores it (file GeomPhase). Checkpoints written before
+        // that file existed fall back to re-deriving it from the switches
+        // already made.
+        {
+            ParmParse pp("vidyut");
+            int deck_phase = 0;
+            pp.query("geom_phase", deck_phase);
+            int done = 0;
+            for (const int s : geom_switch_steps)
+            {
+                if (s < istep[0]) ++done;
+            }
+            const std::string pfile = restart_chkfile + "/GeomPhase";
+            if (amrex::FileExists(pfile))
+            {
+                Vector<char> buf;
+                ParallelDescriptor::ReadAndBcastFile(pfile, buf);
+                std::istringstream is(std::string(buf.dataPtr()));
+                int stored = 0;
+                is >> stored;
+                if (!geom_switch_steps.empty() && deck_phase + done != stored)
+                {
+                    amrex::Abort(
+                        "vidyut.geom_phase + switches in "
+                        "vidyut.geom_switch_steps before the restart step "
+                        "give phase " +
+                        std::to_string(deck_phase + done) +
+                        ", but the checkpoint was written at phase " +
+                        std::to_string(stored) + "\n");
+                }
+                pp.add("geom_phase", stored);
+                amrex::Print() << "Restart at step " << istep[0]
+                               << ": vidyut.geom_phase = " << stored
+                               << " (from the checkpoint)\n";
+            } else if (!geom_switch_steps.empty())
+            {
+                pp.add("geom_phase", deck_phase + done);
+                amrex::Print() << "Restart at step " << istep[0] << ": "
+                               << done << " geometry switch(es) already made, "
+                               << "vidyut.geom_phase = " << deck_phase + done
+                               << "\n";
+            }
+        }
     }
 
     if (plot_int > 0 || plot_time > 0.0)
@@ -600,7 +648,38 @@ void Vidyut::ReadParameters()
         pp.query("use_hypre", use_hypre);
 #endif
         pp.query("freeze_etemp", freeze_etemp);
+        pp.queryarr("geom_switch_steps", geom_switch_steps);
+        for (int i = 0; i < geom_switch_steps.size(); ++i)
+        {
+            if (geom_switch_steps[i] < 1 ||
+                (i > 0 && geom_switch_steps[i] <= geom_switch_steps[i - 1]))
+            {
+                amrex::Abort(
+                    "vidyut.geom_switch_steps must be >= 1 and strictly "
+                    "increasing\n");
+            }
+        }
+        {
+            int phase = 0;
+            pp.query("geom_phase", phase);
+            if (phase < 0)
+            {
+                amrex::Abort("vidyut.geom_phase must be >= 0\n");
+            }
+        }
         pp.query("using_ib", using_ib);
+        // a switch only changes anything through the per-level EB rebuild
+#ifndef AMREX_USE_EB
+        if (!geom_switch_steps.empty())
+        {
+            amrex::Abort(
+                "vidyut.geom_switch_steps needs an EB build (USE_EB=TRUE)\n");
+        }
+#endif
+        if (!geom_switch_steps.empty() && !using_ib)
+        {
+            amrex::Abort("vidyut.geom_switch_steps needs vidyut.using_ib=1\n");
+        }
         pp.query("ib_identity_rows", ib_identity_rows);
         pp.query("ib_cf_clearance_warn", ib_cf_clearance_warn);
         if (ib_identity_rows < 0)
@@ -1041,13 +1120,12 @@ void Vidyut::correct_efields_ib(
                             efield_fc_arr[idim](face) = 0.0;
                         } else if (cov_uncov_interface)
                         {
-                            // FIXME/WARNING: this logic will work if there
-                            // sufficient number of valid cells between two
-                            // immersed boundaries. situation like
-                            // covered|valid|covered will cause problems
+                            // get_onesided_grad_ib falls back to a shorter
+                            // stencil when the channel between two immersed
+                            // boundaries is one or two gas cells wide
 
                             int sgn = (mask_L == 1) ? 1 : -1;
-                            amrex::Real pot_grad = get_onesided_grad(
+                            amrex::Real pot_grad = get_onesided_grad_ib(
                                 face, sgn, idim, POT_ID, dx, sb_arr);
                             efield_fc_arr[idim](face) = -pot_grad;
                         } else
