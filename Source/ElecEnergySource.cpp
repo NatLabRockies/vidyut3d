@@ -244,12 +244,11 @@ void Vidyut::compute_elecenergy_source(
                             }
                         } else // cov-uncov interface
                         {
-                            // FIXME/WARNING: this logic will work if there
-                            // sufficient number of valid cells between two
-                            // immersed boundaries. situation like
-                            // covered|valid|covered will cause problems
+                            // get_onesided_grad_ib falls back to a shorter
+                            // stencil when the channel between two immersed
+                            // boundaries is one or two gas cells wide
                             int sgn = (mask_L == 1) ? 1 : -1;
-                            gradne_face = get_onesided_grad(
+                            gradne_face = get_onesided_grad_ib(
                                 face, sgn, idim, eidx, dx, sborder_arr);
                             current_density = charge * (mu * ne * efield_face -
                                                         dcoeff * gradne_face);

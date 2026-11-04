@@ -1,0 +1,2 @@
+CEXE_headers += AppGeom.H Prob.H UserFunctions.H Chemistry.H UserSources.H ProbParm.H
+CEXE_sources += Chemistry.cpp

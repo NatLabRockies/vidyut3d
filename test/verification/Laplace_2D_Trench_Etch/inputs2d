@@ -1,0 +1,66 @@
+max_step  = 16
+stop_time = 2e-8
+
+# PROBLEM SIZE & GEOMETRY (etch demo, units of 100 nm; box offset so no wall sits on a grid line)
+geometry.is_periodic =  0 0
+geometry.coord_sys   =  0
+geometry.prob_lo     =  -3.23  -7.97
+geometry.prob_hi     =   3.17   4.83
+amr.n_cell           = 128 256
+
+eb2.trench_depth  = 0.0        # used only when eb2.etch_stages = 0
+eb2.etch_stages   = 3          # depth final_depth * phase / 3 after each switch
+eb2.final_depth   = 5.2
+eb2.final_wbot    = 1.16
+eb2.trench_wtop   = 2.0
+eb2.trench_wbot   = 2.0        # used only when eb2.etch_stages = 0
+eb2.mask_height   = 1.0
+eb2.bottom_radius = 0.3
+
+
+# VERBOSITY
+amr.v              = 1
+
+# REFINEMENT
+amr.max_level       = 2
+amr.n_error_buf     = 8
+vidyut.refine_cutcells = 1
+amr.blocking_factor = 16
+amr.max_grid_size   = 32
+amr.regrid_int      = 1000000  # no periodic regrid: only the geometry switch may change the grids
+
+# TIME STEP CONTROL: a steady Laplace solve, stepped only to drive the solver
+vidyut.dt             = 1e-13
+vidyut.num_timestep_correctors = 1
+vidyut.hyp_order = 5
+vidyut.user_defined_potential = 1
+vidyut.user_defined_species = 1
+vidyut.user_defined_vel = 1
+vidyut.using_ib=1
+
+
+#0 - periodic, 1 - Dirichlet, 2 - Homogeneous Neumann, 3 - Inhomogeneous Neumann, 4 - Robin
+vidyut.pot_bc_lo = 2 1
+vidyut.pot_bc_hi = 2 1
+
+vidyut.eden_bc_lo = 2 2
+vidyut.eden_bc_hi = 2 2
+vidyut.eenrg_bc_lo = 2 2
+vidyut.eenrg_bc_hi = 2 2
+vidyut.ion_bc_lo = 2 2
+vidyut.ion_bc_hi = 2 2
+vidyut.neutral_bc_lo = 2 2
+vidyut.neutral_bc_hi = 2 2
+
+# PLOTFILES
+amr.plot_file  = plt
+amr.plot_int   = 1
+amr.chk_file = chk
+amr.chk_int  = 1000
+
+vidyut.linsolve_reltol = 1.0e-12
+vidyut.linsolve_abstol = 1.0e-14
+vidyut.linsolve_maxiter = 1000
+
+# etch in one run: switch the geometry before steps 4, 8, 12 (three etch stages)
+vidyut.geom_switch_steps = 4 8 12

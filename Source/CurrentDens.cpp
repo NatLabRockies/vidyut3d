@@ -291,14 +291,16 @@ void Vidyut::compute_current_density_at_level(
                                 }
                             } else // cov-uncov interface
                             {
+                                // the _ib variant shortens the stencil in
+                                // channels one or two gas cells wide
                                 int sgn = (mask_L == 1) ? 1 : -1;
                                 face_efield =
-                                    -1.0 * get_onesided_grad(
+                                    -1.0 * get_onesided_grad_ib(
                                                face, sgn, idim, POT_ID, dx,
                                                sborder_arr);
                                 for (int sp = 0; sp < NUM_SPECIES; sp++)
                                 {
-                                    face_specden_grad[sp] = get_onesided_grad(
+                                    face_specden_grad[sp] = get_onesided_grad_ib(
                                         face, sgn, idim, sp, dx, sborder_arr);
                                 }
                             }

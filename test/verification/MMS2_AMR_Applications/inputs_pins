@@ -1,0 +1,130 @@
+max_step  = 960       # steady by step 960 (1920 and 3840 give the same error)
+stop_time = 1000
+
+# PROBLEM SIZE & GEOMETRY
+geometry.is_periodic =  0 0
+geometry.coord_sys   =  0       # 0 => cart, 1 => RZ (axisymmetric)
+geometry.prob_lo     =  -3.0  -1.5
+geometry.prob_hi     =   3.0   1.5
+amr.n_cell           = 256 128
+
+# EB
+eb2.geom_type = applications       # see AppGeom.H
+
+# degenerate-cell safeguards
+prob.corner_fallback = 1
+prob.d_floor_frac    = 0.5
+prob.proj_switch     = 0
+prob.face_fallback   = 1
+prob.ray_dirichlet   = 1   # paper config (Case 4): wall value at the face-direction ray hit
+prob.perface_fallback = 1   # paper config: per-face wall lookup at concave corners
+
+# VERBOSITY
+amr.v              = 1       # verbosity in Amr
+
+# RESTART
+# amr.restart = chk00020
+
+# REFINEMENT
+amr.max_level       = 0       # maximum level number allowed
+amr.blocking_factor = 16       # block factor in grid generation
+amr.max_grid_size   = 64
+
+amr.regrid_int      = 1       # how often to regrid
+
+# TIME STEP CONTROL
+vidyut.dt             = 0.01
+vidyut.hyp_order=5
+vidyut.num_timestep_correctors=1
+
+
+
+
+vidyut.user_defined_potential = 1
+vidyut.user_defined_species = 1
+vidyut.user_defined_vel = 1
+vidyut.using_ib=1
+vidyut.freeze_etemp=1   # Electron_energy is a plain manufactured scalar
+
+vidyut.bound_specden=0
+vidyut.min_species_density=1e-11
+vidyut.min_electron_density=1e-11
+vidyut.min_electron_temp=1e-11
+vidyut.linsolve_maxiter=200
+vidyut.elecenergy_solve=1
+vidyut.bg_species_ids=1
+vidyut.gas_temperature=1e-50
+
+#0 - periodic
+#1 - Dirichlet
+#2 - Homogeneous Neumann
+#3 - Inhomogeneous Neumann
+#4 - Robin
+
+prob.inner_radius=0.5
+prob.outer_radius=1.5
+prob.inner_voltage=10.0
+prob.outer_voltage=20.0
+prob.a_inner_dir = 1.0
+prob.b_inner_neumann = 0.0
+prob.a_outer_dir = 1.0
+prob.b_outer_neumann = 0.0
+
+vidyut.pot_bc_lo = 4 4
+vidyut.pot_bc_hi = 4 4
+
+vidyut.eden_bc_lo = 1 1
+vidyut.eden_bc_hi = 1 1
+
+vidyut.eenrg_bc_lo = 1 1
+vidyut.eenrg_bc_hi = 1 1
+
+vidyut.ion_bc_lo = 1 1
+vidyut.ion_bc_hi = 1 1
+
+vidyut.neutral_bc_lo = 2 2
+vidyut.neutral_bc_hi = 2 2
+
+#vidyut.pot_bc_lo = 0 0
+#vidyut.pot_bc_hi = 0 0
+
+#vidyut.eden_bc_lo = 0 0
+#vidyut.eden_bc_hi = 0 0
+
+#vidyut.eenrg_bc_lo = 0 0
+#vidyut.eenrg_bc_hi = 0 0
+
+#vidyut.ion_bc_lo = 0 0
+#vidyut.ion_bc_hi = 0 0
+
+#vidyut.neutral_bc_lo = 0 0
+#vidyut.neutral_bc_hi = 0 0
+
+# PLOTFILES
+amr.plot_file  = plt    # root name of plot file
+amr.plot_int   = 1000     # number of timesteps between plot files
+
+# CHECKPOINT
+amr.chk_file = chk      # root name of checkpoint file
+amr.chk_int  = 1000      # number of timesteps between checkpoint files
+
+vidyut.linsolve_reltol = 1.0e-12
+vidyut.linsolve_abstol = 1.0e-14
+vidyut.linsolve_maxiter = 1000
+
+
+
+prob.cmask_vfrac = 0
+
+# chamber box (fluid inside); walls placed off grid lines of every level
+eb2.app_ch_x  = 2.8203125
+eb2.app_ch_y0 = -1.390625
+eb2.app_ch_y1 = 1.390625
+
+# ---- pin array: three needles, unequal gaps, above a plane ----
+eb2.app_type       = pins
+eb2.app_plane_y    = -0.9921875
+eb2.app_pin_x      = -1.7 0.0 1.7
+eb2.app_pin_ytip   = 0.40 0.59 0.70
+eb2.app_tip_r      = 0.04       # 1.7 coarse cells, 7 cells on level 2
+eb2.app_half_angle = 12.0       # degrees

@@ -170,17 +170,27 @@ void Vidyut::rebuild_level_geometry(
             const CompRange* rp = d_rr.data();
             const int nr = static_cast<int>(rr.size());
 
-            // Sweep until nothing is left to fill rather than a fixed number
-            // of times: the width of a newly fluid region is not bounded by
-            // anything the caller controls, and a cell left unfilled would
-            // keep the coarse zero, which is the defect this exists to
-            // remove. The cap only stops an infinite loop if a region has no
-            // fluid neighbour at all, in which case there is nothing that
-            // could fill it.
-            constexpr int max_sweeps = 32;
+            // Sweep until nothing is left to fill. The front advances one
+            // cell per sweep, and the depth of a newly fluid region is not
+            // bounded by anything the caller controls (an etch stage opens
+            // tens of cells), so there is no fixed sweep count. The loop stops
+            // early only when a sweep fills nothing: the cells still waiting
+            // then have no fluid neighbour anywhere, and nothing could fill
+            // them. Each sweep that continues fills at least one cell, so the
+            // loop ends.
+            amrex::Long nneed_prev = -1;
             MultiFab phisnap(ba, dm, ncomp, ngf);
             iMultiFab stsnap(ba, dm, 1, ngf);
-            for (int sweep = 0; sweep < max_sweeps; sweep++)
+            // Each sweep copies the valid cells only, and FillBoundary sets
+            // only the ghosts shared with another box of this level. Ghosts
+            // on the domain faces and at the coarse-fine boundary keep what
+            // is set here, so set them to solid (never a donor) once. Left
+            // uninitialised, they held whatever was in memory, a cell could
+            // read one as a donor, and the fill then depended on the heap
+            // (it differed after a restart).
+            stsnap.setVal(ST_SOLID);
+            phisnap.setVal(0.0);
+            while (true)
             {
                 amrex::Long nneed = amrex::ReduceSum(
                     cellstate, 0,
@@ -195,14 +205,21 @@ void Vidyut::rebuild_level_geometry(
                     });
                 amrex::ParallelDescriptor::ReduceLongSum(nneed);
                 if (nneed == 0) break;
-                if (sweep == max_sweeps - 1)
+                if (nneed == nneed_prev)
                 {
-                    amrex::Print()
-                        << "WARNING: " << nneed
-                        << " cell(s) became fluid on level " << lev
-                        << " at this regrid and have no fluid neighbour to "
-                           "take a value from; they keep the value they had\n";
+                    // on a finer level these are taken from the coarse level
+                    // below; on level 0 there is nothing left to take from
+                    if (lev == 0)
+                    {
+                        amrex::Print()
+                            << "WARNING: " << nneed
+                            << " cell(s) became fluid on level 0 at this "
+                               "regrid and have no fluid neighbour to take a "
+                               "value from; they keep the value they had\n";
+                    }
+                    break;
                 }
+                nneed_prev = nneed;
                 MultiFab::Copy(phisnap, phi_new[lev], 0, 0, ncomp, 0);
                 amrex::iMultiFab::Copy(stsnap, cellstate, 0, 0, 1, 0);
                 phisnap.FillBoundary(geom[lev].periodicity());
@@ -252,6 +269,54 @@ void Vidyut::rebuild_level_geometry(
                     });
                 amrex::Gpu::streamSynchronize();
             }
+
+            // A fine cell can be left waiting when its only gas path runs
+            // through the coarse-fine boundary, whose ghosts are solid above.
+            // The coarse level has already been rebuilt and filled (levels
+            // are processed coarse to fine), so take those cells from it by
+            // interpolation rather than leave them with the case's initial
+            // value.
+            if (lev > 0)
+            {
+                amrex::Long nleft = amrex::ReduceSum(
+                    cellstate, 0,
+                    [=] AMREX_GPU_HOST_DEVICE(
+                        amrex::Box const& bx,
+                        amrex::Array4<int const> const& st) -> amrex::Long {
+                        amrex::Long n = 0;
+                        amrex::Loop(bx, [=, &n](int i, int j, int k) noexcept {
+                            if (st(i, j, k) == ST_NEEDS) n++;
+                        });
+                        return n;
+                    });
+                amrex::ParallelDescriptor::ReduceLongSum(nleft);
+                if (nleft > 0)
+                {
+                    MultiFab fromcoarse(ba, dm, ncomp, 0);
+                    FillCoarsePatch(lev, t_new[lev - 1], fromcoarse, 0, ncomp);
+                    auto const& fc = fromcoarse.const_arrays();
+                    auto const& st = cellstate.const_arrays();
+                    auto const& ph = phi_new[lev].arrays();
+                    amrex::ParallelFor(
+                        phi_new[lev], [=] AMREX_GPU_DEVICE(
+                                          int nbx, int i, int j, int k) noexcept {
+                            if (st[nbx](i, j, k) != ST_NEEDS) return;
+                            for (int r = 0; r < nr; r++)
+                            {
+                                if (rp[r].is_geometry) continue;
+                                for (int n = rp[r].scomp;
+                                     n < rp[r].scomp + rp[r].ncomp; n++)
+                                {
+                                    ph[nbx](i, j, k, n) = fc[nbx](i, j, k, n);
+                                }
+                            }
+                        });
+                    amrex::Gpu::streamSynchronize();
+                    amrex::Print()
+                        << nleft << " newly fluid cell(s) on level " << lev
+                        << " filled from the coarse level\n";
+                }
+            }
         }
     }
 #else
@@ -262,6 +327,54 @@ void Vidyut::rebuild_level_geometry(
     // boundary. Use an EB case if you want refinement to improve the geometry.
     amrex::ignore_unused(lev, ba, dm);
 #endif
+}
+
+// Mid-run geometry change (vidyut.geom_switch_steps). The case's
+// init_level_with_eb reads its shape from ParmParse, so bumping
+// vidyut.geom_phase and rebuilding every level changes the geometry. The
+// solution is kept where a cell stays gas and extended into cells that open
+// (preserve_solution). AmrCore::regrid alone is not enough: it never remakes
+// level 0 or a level whose grids did not change.
+void Vidyut::change_geometry(Real time)
+{
+    BL_PROFILE("Vidyut::change_geometry()");
+#ifdef AMREX_USE_EB
+    if (!h_prob_parm->enable_EB)
+    {
+        amrex::Abort(
+            "vidyut.geom_switch_steps needs a case with its EB geometry "
+            "enabled (prob enable_EB)\n");
+    }
+#endif
+    int phase = 0;
+    {
+        ParmParse pp("vidyut");
+        pp.query("geom_phase", phase);
+        pp.add("geom_phase", phase + 1);
+    }
+    amrex::Print() << "Geometry switch at time " << time
+                   << ": vidyut.geom_phase " << phase << " -> " << phase + 1
+                   << "\n";
+
+    for (int lev = 0; lev <= finest_level; ++lev)
+    {
+        rebuild_level_geometry(
+            lev, grids[lev], dmap[lev], /*preserve_solution=*/true);
+    }
+    AverageDown();
+
+    // AmrCore::regrid tags each level on its OLD grids, so one call can only
+    // refine level l+1 where level l already was. Repeat it max_level times
+    // so the refinement reaches walls that are new at every level, as the
+    // level-by-level build at start-up does.
+    // Reset before the regrid passes, so the refine_cutcells check in
+    // ErrorEst runs on the new geometry.
+    cutcell_mask_checked = 0;
+    for (int pass = 0; pass < max_level; ++pass)
+    {
+        regrid(0, time);
+    }
+    check_ib_cf_clearance();
 }
 
 // Make a new level using provided BoxArray and DistributionMapping and

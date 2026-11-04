@@ -124,6 +124,12 @@ void Vidyut::WriteCheckpointFile(int chkfilenum) const
             boxArray(lev).writeOn(HeaderFile);
             HeaderFile << '\n';
         }
+
+        // the geometry phase, in its own file so older readers are unaffected
+        int phase = 0;
+        ParmParse("vidyut").query("geom_phase", phase);
+        std::ofstream PhaseFile(checkpointname + "/GeomPhase");
+        PhaseFile << phase << "\n";
     }
 
     // write the MultiFab data to, e.g., chk00010/Level_0/
