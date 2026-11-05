@@ -21,6 +21,9 @@
 
 using namespace amrex;
 
+// true when the case defines user_transport::ib_wall_value (ScalarSolve.cpp)
+bool ib_wall_value_hook_defined();
+
 class Vidyut : public amrex::AmrCore
 {
 public:
@@ -74,6 +77,17 @@ public:
     virtual void
     ErrorEst(int lev, amrex::TagBoxArray& tags, amrex::Real time, int ngrow)
         override;
+
+    void fill_species_robin_bcs(
+        int ilev,
+        int startspec,
+        int numspec,
+        MultiFab& Sborder,
+        MultiFab& specdata,
+        MultiFab& robin_a,
+        MultiFab& robin_b,
+        MultiFab& robin_f,
+        Real current_time);
 
     void compute_scalar_transport_flux(
         int startspec,
@@ -300,6 +314,13 @@ public:
     int hyp_order = 1;
     int ngrow_for_fillpatch = 2;
     int weno_scheme = 3; // WENO-Z by default
+    // WENO5 stencil cells outside the fluid (beyond a non-periodic domain
+    // face, or masked IB cells): 0 = copy of the nearest fluid cell (old
+    // behaviour); 1 = linear extrapolation at outflow walls, linear through
+    // the Dirichlet wall value at inflow walls where it is known (domain BC
+    // data, user_transport::ib_wall_value for IB walls) and a copy otherwise;
+    // the drift velocity is extrapolated linearly. See compute_flux.
+    int hyp_wall_ghosts = 0;
     int track_surf_charge = 0;
     int track_current_den = 0;
 

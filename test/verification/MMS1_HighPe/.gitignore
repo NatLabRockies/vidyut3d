@@ -1,0 +1,3 @@
+runs/
+*.log
+l2err/*.ex

@@ -80,6 +80,12 @@ jobs:
         cd ../../
         cd GEC_RF_Cell
         make -j 2 USE_CCACHE=TRUE COMP=gnu
+        cd ..
+        cd MMS1_HighPe
+        make -j 2 USE_CCACHE=TRUE COMP=gnu
+        cd l2err
+        make -j USE_CCACHE=TRUE
+        cd ../../
         ccache -s
     - name: Run Regression
       working-directory: ./test/verification/
@@ -115,6 +121,19 @@ jobs:
           cd GEC_RF_Cell
           mpirun -n 2 ./*.ex inputs max_step=100
           mv plt00001 dev-plt00001
+          cd ..
+          cd MMS1_HighPe
+          mpirun -n 2 ./*.ex inputs
+          ./l2err/*.ex -linf 1.0e-4 $(ls -d plt* | tail -1)
+          rm -rf plt*
+          mpirun -n 2 ./*.ex inputs prob.field_sign=-1
+          ./l2err/*.ex -linf 3.0e-4 $(ls -d plt* | tail -1)
+          rm -rf plt*
+          mpirun -n 2 ./*.ex inputs_ib
+          ./l2err/*.ex -linf 1.0e-4 $(ls -d plt* | tail -1)
+          rm -rf plt*
+          mpirun -n 2 ./*.ex inputs_ib prob.field_sign=-1
+          ./l2err/*.ex -linf 3.0e-4 $(ls -d plt* | tail -1)
     - name: Build EB Case
       working-directory: ./test/verification/Laplace_2D_RobinBC_Test_EB/
       run: |

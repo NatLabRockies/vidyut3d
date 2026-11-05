@@ -1,0 +1,44 @@
+# High-Peclet drift at domain walls (no IB). See README.md.
+max_step  = 100000
+stop_time = 3.0
+
+geometry.is_periodic =  0
+geometry.coord_sys   =  0
+geometry.prob_lo     =  0.0
+geometry.prob_hi     =  1.0
+amr.n_cell           =  64
+
+amr.v              = 1
+amr.max_level      = 0
+amr.blocking_factor = 4
+amr.max_grid_size   = 8
+
+# dt = 0.4 h / max|v|, max|v| = 2
+vidyut.dt             = 0.003125
+vidyut.hyp_order      = 5
+vidyut.num_timestep_correctors = 2
+vidyut.hyp_wall_ghosts = 1
+
+vidyut.user_defined_potential = 1
+vidyut.user_defined_species = 1
+vidyut.user_defined_vel = 1
+
+#0 periodic, 1 Dirichlet, 2 homogeneous Neumann, 3 inhomogeneous Neumann, 4 Robin
+vidyut.pot_bc_lo = 4
+vidyut.pot_bc_hi = 4
+vidyut.eden_bc_lo = 2
+vidyut.eden_bc_hi = 2
+vidyut.eenrg_bc_lo = 2
+vidyut.eenrg_bc_hi = 2
+vidyut.ion_bc_lo = 4
+vidyut.ion_bc_hi = 4
+vidyut.neutral_bc_lo = 2
+vidyut.neutral_bc_hi = 2
+
+# E = field_sign (1 + x); +1: inflow wall at x = 0, outflow wall at x = 1
+prob.field_sign = 1.0
+
+amr.plot_file  = plt
+amr.plot_int   = 100000
+amr.chk_file   = chk
+amr.chk_int    = -1
