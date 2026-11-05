@@ -215,6 +215,9 @@ void Vidyut::update_rxnsrc_at_all_levels(
     }
 }
 
+// compute_explicit_flux.H sees the case's UserFunctions.H only here
+bool ib_wall_value_hook_defined() { return ib_wall_value_defined; }
+
 void Vidyut::compute_scalar_transport_flux(
     int startspec,
     int numspec,
@@ -258,6 +261,27 @@ void Vidyut::compute_scalar_transport_flux(
     GpuArray<int, AMREX_SPACEDIM> bchi = {
         AMREX_D_DECL(bc_hi[0], bc_hi[1], bc_hi[2])};
 
+    // species boundary data for the WENO5 wall ghosts
+    int captured_wall_ghosts = hyp_wall_ghosts;
+    MultiFab bc_robin_a, bc_robin_b, bc_robin_f;
+    if (hyp_wall_ghosts == 1)
+    {
+        MultiFab specdata(grids[lev], dmap[lev], numspec, 1);
+        bc_robin_a.define(grids[lev], dmap[lev], numspec, 1);
+        bc_robin_b.define(grids[lev], dmap[lev], numspec, 1);
+        bc_robin_f.define(grids[lev], dmap[lev], numspec, 1);
+        amrex::Copy(specdata, Sborder, startspec, 0, numspec, 1);
+        // default homogeneous Neumann, as in implicit_solve_scalar
+        bc_robin_a.setVal(0.0);
+        bc_robin_b.setVal(1.0);
+        bc_robin_f.setVal(0.0);
+        fill_species_robin_bcs(
+            lev, startspec, numspec, Sborder, specdata, bc_robin_a, bc_robin_b,
+            bc_robin_f, current_time);
+        // specdata goes out of scope here
+        Gpu::streamSynchronize();
+    }
+
 #ifdef _OPENMP
 #pragma omp parallel if (Gpu::notInLaunchRegion())
 #endif
@@ -265,6 +289,13 @@ void Vidyut::compute_scalar_transport_flux(
         for (MFIter mfi(Sborder, TilingIfNotGPU()); mfi.isValid(); ++mfi)
         {
             const Box& bx = mfi.tilebox();
+            Array4<Real const> bca, bcb, bcf;
+            if (captured_wall_ghosts == 1)
+            {
+                bca = bc_robin_a.const_array(mfi);
+                bcb = bc_robin_b.const_array(mfi);
+                bcf = bc_robin_f.const_array(mfi);
+            }
             Box bx_x = mfi.nodaltilebox(0);
 #if AMREX_SPACEDIM > 1
             Box bx_y = mfi.nodaltilebox(1);
@@ -291,7 +322,8 @@ void Vidyut::compute_scalar_transport_flux(
                         bclo, bchi, domlo, domhi, flux_arr[0], captured_gastemp,
                         captured_gaspres, time, dx, lev_dt, *localprobparm,
                         captured_hyporder, userdefvel, captured_wenoscheme,
-                        captured_using_ib);
+                        captured_using_ib, bca, bcb, bcf, captured_wall_ghosts,
+                        prob_lo);
                 }
             });
 
@@ -305,7 +337,8 @@ void Vidyut::compute_scalar_transport_flux(
                         bclo, bchi, domlo, domhi, flux_arr[1], captured_gastemp,
                         captured_gaspres, time, dx, lev_dt, *localprobparm,
                         captured_hyporder, userdefvel, captured_wenoscheme,
-                        captured_using_ib);
+                        captured_using_ib, bca, bcb, bcf, captured_wall_ghosts,
+                        prob_lo);
                 }
             });
 
@@ -319,12 +352,18 @@ void Vidyut::compute_scalar_transport_flux(
                         bclo, bchi, domlo, domhi, flux_arr[2], captured_gastemp,
                         captured_gaspres, time, dx, lev_dt, *localprobparm,
                         captured_hyporder, userdefvel, captured_wenoscheme,
-                        captured_using_ib);
+                        captured_using_ib, bca, bcb, bcf, captured_wall_ghosts,
+                        prob_lo);
                 }
             });
 #endif
 #endif
         }
+    }
+    if (captured_wall_ghosts == 1)
+    {
+        // bc_robin_* go out of scope at return
+        Gpu::streamSynchronize();
     }
 }
 
@@ -660,113 +699,9 @@ void Vidyut::implicit_solve_scalar(
             GetArrOfPtrs(face_bcoeff), bcoeff[ilev], geom[ilev], numspec, true);
 
         // set boundary conditions
-        for (MFIter mfi(phi_new[ilev], TilingIfNotGPU()); mfi.isValid(); ++mfi)
-        {
-            const Box& bx = mfi.tilebox();
-            const auto dx = geom[ilev].CellSizeArray();
-            auto prob_lo = geom[ilev].ProbLoArray();
-            auto prob_hi = geom[ilev].ProbHiArray();
-            const Box& domain = geom[ilev].Domain();
-
-            Array4<Real> bc_arr = specdata[ilev].array(mfi);
-            Array4<Real> sb_arr = Sborder[ilev].array(mfi);
-            Real time = current_time; // for GPU capture
-
-            Array4<Real> robin_a_arr = robin_a[ilev].array(mfi);
-            Array4<Real> robin_b_arr = robin_b[ilev].array(mfi);
-            Array4<Real> robin_f_arr = robin_f[ilev].array(mfi);
-
-            for (int idim = 0; idim < AMREX_SPACEDIM; ++idim)
-            {
-                if (!geom[ilev].isPeriodic(idim))
-                {
-                    if (bx.smallEnd(idim) == domain.smallEnd(idim))
-                    {
-                        amrex::ParallelFor(
-                            amrex::bdryLo(bx, idim),
-                            [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-                                if (userdefspec == 1)
-                                {
-                                    for (int specid = captured_startspec;
-                                         specid < (captured_startspec +
-                                                   captured_numspec);
-                                         specid++)
-                                    {
-                                        user_transport::species_bc(
-                                            i, j, k, idim, -1, specid,
-                                            specid - captured_startspec, sb_arr,
-                                            bc_arr, robin_a_arr, robin_b_arr,
-                                            robin_f_arr, prob_lo, prob_hi, dx,
-                                            time, *localprobparm,
-                                            captured_gastemp, captured_gaspres,
-                                            int_currents, int_current_areas,
-                                            int_current_surfaces);
-                                    }
-                                } else
-                                {
-                                    for (int specid = captured_startspec;
-                                         specid < (captured_startspec +
-                                                   captured_numspec);
-                                         specid++)
-                                    {
-                                        plasmachem_transport::species_bc(
-                                            i, j, k, idim, -1, specid,
-                                            specid - captured_startspec, sb_arr,
-                                            bc_arr, robin_a_arr, robin_b_arr,
-                                            robin_f_arr, prob_lo, prob_hi, dx,
-                                            time, *localprobparm,
-                                            captured_gastemp, captured_gaspres,
-                                            int_currents, int_current_areas,
-                                            int_current_surfaces);
-                                    }
-                                }
-                            });
-                    }
-                    if (bx.bigEnd(idim) == domain.bigEnd(idim))
-                    {
-                        amrex::ParallelFor(
-                            amrex::bdryHi(bx, idim),
-                            [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
-                                if (userdefspec == 1)
-                                {
-                                    for (int specid = captured_startspec;
-                                         specid < (captured_startspec +
-                                                   captured_numspec);
-                                         specid++)
-                                    {
-                                        user_transport::species_bc(
-                                            i, j, k, idim, +1, specid,
-                                            specid - captured_startspec, sb_arr,
-                                            bc_arr, robin_a_arr, robin_b_arr,
-                                            robin_f_arr, prob_lo, prob_hi, dx,
-                                            time, *localprobparm,
-                                            captured_gastemp, captured_gaspres,
-                                            int_currents, int_current_areas,
-                                            int_current_surfaces);
-                                    }
-                                } else
-                                {
-                                    for (int specid = captured_startspec;
-                                         specid < (captured_startspec +
-                                                   captured_numspec);
-                                         specid++)
-                                    {
-                                        plasmachem_transport::species_bc(
-                                            i, j, k, idim, +1, specid,
-                                            specid - captured_startspec, sb_arr,
-                                            bc_arr, robin_a_arr, robin_b_arr,
-                                            robin_f_arr, prob_lo, prob_hi, dx,
-                                            time, *localprobparm,
-                                            captured_gastemp, captured_gaspres,
-                                            int_currents, int_current_areas,
-                                            int_current_surfaces);
-                                    }
-                                }
-                            });
-                    }
-                }
-            }
-        }
+        fill_species_robin_bcs(
+            ilev, startspec, numspec, Sborder[ilev], specdata[ilev],
+            robin_a[ilev], robin_b[ilev], robin_f[ilev], current_time);
 
         if (using_ib)
         {
@@ -982,4 +917,148 @@ void Vidyut::implicit_solve_scalar(
     robin_a.clear();
     robin_b.clear();
     robin_f.clear();
+}
+
+// Robin coefficients (a phi + b dphi/dn = f) of the species boundary
+// conditions in the first ghost cell of every non-periodic domain face.
+// Used by the implicit solve and by the WENO wall ghosts (hyp_wall_ghosts).
+void Vidyut::fill_species_robin_bcs(
+    int ilev,
+    int startspec,
+    int numspec,
+    MultiFab& Sborder,
+    MultiFab& specdata,
+    MultiFab& robin_a,
+    MultiFab& robin_b,
+    MultiFab& robin_f,
+    Real current_time)
+{
+    BL_PROFILE("Vidyut::fill_species_robin_bcs()");
+    ProbParm const* localprobparm = d_prob_parm;
+    amrex::Real captured_gastemp = gas_temperature;
+    amrex::Real captured_gaspres = gas_pressure;
+    int userdefspec = user_defined_species;
+    int captured_startspec = startspec;
+    int captured_numspec = numspec;
+
+    amrex::GpuArray<amrex::Real, MAX_CURRENT_LOCS> int_currents = {{0.0}};
+    amrex::GpuArray<amrex::Real, MAX_CURRENT_LOCS> int_current_areas = {{0.0}};
+    amrex::GpuArray<int, MAX_CURRENT_LOCS> int_current_surfaces = {{0}};
+    if (track_integrated_currents)
+    {
+        for (int i = 0; i < ncurrent_locs; i++)
+        {
+            int_currents[i] = integrated_conduction_currents[i];
+            int_current_areas[i] = integrated_current_areas[i];
+            int_current_surfaces[i] = current_loc_surfaces[i];
+        }
+    }
+
+    for (MFIter mfi(phi_new[ilev], TilingIfNotGPU()); mfi.isValid(); ++mfi)
+    {
+        const Box& bx = mfi.tilebox();
+        const auto dx = geom[ilev].CellSizeArray();
+        auto prob_lo = geom[ilev].ProbLoArray();
+        auto prob_hi = geom[ilev].ProbHiArray();
+        const Box& domain = geom[ilev].Domain();
+
+        Array4<Real> bc_arr = specdata.array(mfi);
+        Array4<Real> sb_arr = Sborder.array(mfi);
+        Real time = current_time; // for GPU capture
+
+        Array4<Real> robin_a_arr = robin_a.array(mfi);
+        Array4<Real> robin_b_arr = robin_b.array(mfi);
+        Array4<Real> robin_f_arr = robin_f.array(mfi);
+
+        for (int idim = 0; idim < AMREX_SPACEDIM; ++idim)
+        {
+            if (!geom[ilev].isPeriodic(idim))
+            {
+                if (bx.smallEnd(idim) == domain.smallEnd(idim))
+                {
+                    amrex::ParallelFor(
+                        amrex::bdryLo(bx, idim),
+                        [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+                            if (userdefspec == 1)
+                            {
+                                for (int specid = captured_startspec;
+                                     specid <
+                                     (captured_startspec + captured_numspec);
+                                     specid++)
+                                {
+                                    user_transport::species_bc(
+                                        i, j, k, idim, -1, specid,
+                                        specid - captured_startspec, sb_arr,
+                                        bc_arr, robin_a_arr, robin_b_arr,
+                                        robin_f_arr, prob_lo, prob_hi, dx, time,
+                                        *localprobparm, captured_gastemp,
+                                        captured_gaspres, int_currents,
+                                        int_current_areas,
+                                        int_current_surfaces);
+                                }
+                            } else
+                            {
+                                for (int specid = captured_startspec;
+                                     specid <
+                                     (captured_startspec + captured_numspec);
+                                     specid++)
+                                {
+                                    plasmachem_transport::species_bc(
+                                        i, j, k, idim, -1, specid,
+                                        specid - captured_startspec, sb_arr,
+                                        bc_arr, robin_a_arr, robin_b_arr,
+                                        robin_f_arr, prob_lo, prob_hi, dx, time,
+                                        *localprobparm, captured_gastemp,
+                                        captured_gaspres, int_currents,
+                                        int_current_areas,
+                                        int_current_surfaces);
+                                }
+                            }
+                        });
+                }
+                if (bx.bigEnd(idim) == domain.bigEnd(idim))
+                {
+                    amrex::ParallelFor(
+                        amrex::bdryHi(bx, idim),
+                        [=] AMREX_GPU_DEVICE(int i, int j, int k) noexcept {
+                            if (userdefspec == 1)
+                            {
+                                for (int specid = captured_startspec;
+                                     specid <
+                                     (captured_startspec + captured_numspec);
+                                     specid++)
+                                {
+                                    user_transport::species_bc(
+                                        i, j, k, idim, +1, specid,
+                                        specid - captured_startspec, sb_arr,
+                                        bc_arr, robin_a_arr, robin_b_arr,
+                                        robin_f_arr, prob_lo, prob_hi, dx, time,
+                                        *localprobparm, captured_gastemp,
+                                        captured_gaspres, int_currents,
+                                        int_current_areas,
+                                        int_current_surfaces);
+                                }
+                            } else
+                            {
+                                for (int specid = captured_startspec;
+                                     specid <
+                                     (captured_startspec + captured_numspec);
+                                     specid++)
+                                {
+                                    plasmachem_transport::species_bc(
+                                        i, j, k, idim, +1, specid,
+                                        specid - captured_startspec, sb_arr,
+                                        bc_arr, robin_a_arr, robin_b_arr,
+                                        robin_f_arr, prob_lo, prob_hi, dx, time,
+                                        *localprobparm, captured_gastemp,
+                                        captured_gaspres, int_currents,
+                                        int_current_areas,
+                                        int_current_surfaces);
+                                }
+                            }
+                        });
+                }
+            }
+        }
+    }
 }

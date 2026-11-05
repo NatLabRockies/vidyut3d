@@ -533,6 +533,11 @@ void Vidyut::ReadParameters()
         pp.queryarr("bg_species_ids", bg_specid_list);
 
         pp.query("weno_scheme", weno_scheme);
+        pp.query("hyp_wall_ghosts", hyp_wall_ghosts);
+        if (hyp_wall_ghosts != 0 && hyp_wall_ghosts != 1)
+        {
+            amrex::Abort("vidyut.hyp_wall_ghosts must be 0 or 1");
+        }
         pp.query("track_surf_charge", track_surf_charge);
         pp.query("solver_verbose", solver_verbose);
         pp.query("evolve_verbose", evolve_verbose);
@@ -555,6 +560,26 @@ void Vidyut::ReadParameters()
         } else
         {
             amrex::Abort("Specified hyp_order not implemented yet");
+        }
+        if (hyp_wall_ghosts == 1 && hyp_order != 5)
+        {
+            amrex::Abort(
+                "vidyut.hyp_wall_ghosts=1 requires vidyut.hyp_order=5");
+        }
+        if (hyp_wall_ghosts == 1)
+        {
+            // the WENO5 stencil reaches 3 cells past a face: a box edge 1 or
+            // 2 cells inside a domain face would put stencil cells beyond
+            // the face in a box that holds no boundary data
+            for (int lev = 0; lev <= max_level; ++lev)
+            {
+                if (blocking_factor[lev].min() < 4)
+                {
+                    amrex::Abort(
+                        "vidyut.hyp_wall_ghosts=1 requires "
+                        "amr.blocking_factor >= 4 on every level");
+                }
+            }
         }
 
         // Voltage options
@@ -601,6 +626,14 @@ void Vidyut::ReadParameters()
 #endif
         pp.query("freeze_etemp", freeze_etemp);
         pp.query("using_ib", using_ib);
+        if (hyp_wall_ghosts == 1 && using_ib)
+        {
+            amrex::Print()
+                << "vidyut.hyp_wall_ghosts=1: user_transport::ib_wall_value "
+                << (ib_wall_value_hook_defined()
+                        ? "found, IB inflow walls use the wall value\n"
+                        : "not found, IB inflow walls copy the wall cell\n");
+        }
         pp.query("ib_identity_rows", ib_identity_rows);
         pp.query("ib_cf_clearance_warn", ib_cf_clearance_warn);
         if (ib_identity_rows < 0)

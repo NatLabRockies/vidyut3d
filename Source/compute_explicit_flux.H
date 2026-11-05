@@ -7,6 +7,8 @@
 #include <UnivConstants.H>
 #include <VarDefines.H>
 #include <PlasmaChem.H>
+#include <type_traits>
+#include <utility>
 
 using namespace amrex;
 
@@ -213,6 +215,84 @@ AMREX_GPU_DEVICE AMREX_FORCE_INLINE amrex::Real get_firstorder_upwind_flux(
     return (flux);
 }
 //====================================================================
+// Optional per-case hook for the WENO5 stencil cells behind an IB inflow
+// wall (vidyut.hyp_wall_ghosts=1). A case defines, in UserFunctions.H,
+//
+//   AMREX_GPU_DEVICE AMREX_INLINE bool ib_wall_value(
+//       IntVect cell, int dir, int sgn, int specid,
+//       Array4<Real> const& phi, GpuArray<Real, AMREX_SPACEDIM> prob_lo,
+//       GpuArray<Real, AMREX_SPACEDIM> dx, Real time,
+//       ProbParm const& prob_parm, Real& dist, Real& value)
+//
+// in namespace user_transport. cell is the fluid cell next to the wall and
+// sgn = +1 if the wall is on its high side along dir. It returns true when
+// the wall has a Dirichlet value for specid, with value set to it and dist to
+// the distance from the cell centre to the wall along dir (at least h/2).
+// The template below is found only when a case does not define the hook
+// (or defines it with parameter types that need a conversion), and the ghost
+// cells then copy the fluid cell. The run log says which one was found.
+namespace user_transport {
+struct no_ib_wall_value
+{};
+template <typename... Args>
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE no_ib_wall_value ib_wall_value(Args&&...)
+{
+    return {};
+}
+} // namespace user_transport
+
+// whether the case defines ib_wall_value with a matching signature
+inline constexpr bool ib_wall_value_defined = !std::is_same_v<
+    decltype(user_transport::ib_wall_value(
+        std::declval<const IntVect&>(),
+        0,
+        0,
+        0,
+        std::declval<Array4<Real> const&>(),
+        std::declval<const GpuArray<Real, AMREX_SPACEDIM>&>(),
+        std::declval<const GpuArray<Real, AMREX_SPACEDIM>&>(),
+        Real(0),
+        std::declval<ProbParm const&>(),
+        std::declval<Real&>(),
+        std::declval<Real&>())),
+    user_transport::no_ib_wall_value>;
+
+// true/false from a case hook, false from the fallback
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE bool ib_hook_result(bool known)
+{
+    return known;
+}
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE bool
+ib_hook_result(user_transport::no_ib_wall_value)
+{
+    return false;
+}
+
+AMREX_GPU_DEVICE AMREX_FORCE_INLINE bool ib_inflow_wall(
+    const IntVect& cell,
+    int dir,
+    int sgn,
+    int specid,
+    Array4<Real> const& phi,
+    const GpuArray<Real, AMREX_SPACEDIM>& prob_lo,
+    const GpuArray<Real, AMREX_SPACEDIM>& dx,
+    amrex::Real time,
+    ProbParm const& prob_parm,
+    amrex::Real& dist,
+    amrex::Real& value)
+{
+    const bool known = ib_hook_result(
+        user_transport::ib_wall_value(
+            cell, dir, sgn, specid, phi, prob_lo, dx, time, prob_parm, dist,
+            value));
+    // a fluid cell is never cut, so the wall is at least h/2 away
+    if (known && dist < 0.499 * dx[dir])
+    {
+        amrex::Abort("user_transport::ib_wall_value returned dist < h/2");
+    }
+    return known;
+}
+//====================================================================
 AMREX_GPU_DEVICE
 AMREX_FORCE_INLINE
 void compute_flux(
@@ -237,7 +317,12 @@ void compute_flux(
     int hyp_order,
     int user_defined_vel,
     int weno_scheme,
-    int using_ib)
+    int using_ib,
+    Array4<Real const> const& bc_a,
+    Array4<Real const> const& bc_b,
+    Array4<Real const> const& bc_f,
+    int wall_ghosts,
+    const GpuArray<Real, AMREX_SPACEDIM>& prob_lo)
 {
 
     //|--left1--|--left--|--right--|--right1--|
@@ -371,6 +456,178 @@ void compute_flux(
                 (mask_R1 == 1) ? phi(right1, specid) : phi(right, specid);
             amrex::Real urp2 =
                 (mask_R2 == 1) ? phi(right2, specid) : phi(right, specid);
+
+            // WENO5 stencil cells outside the fluid with
+            // vidyut.hyp_wall_ghosts=1. A copy of the nearest fluid cell makes
+            // WENO5 pick a constant, first-order sub-stencil next to an
+            // outflow wall. The drift velocity is always extrapolated
+            // linearly. The value is extrapolated linearly where the flow
+            // leaves through the wall. Where it enters, the value is linear
+            // through the Dirichlet wall value if one is known (species BC
+            // data at domain faces, user_transport::ib_wall_value at IB
+            // walls) and a copy of the nearest fluid cell otherwise. Linear
+            // extrapolation against the flow is unstable at a domain inflow
+            // face, and was unstable at a curved IB inflow wall in 2D
+            // (N = 256); at a grid-aligned IB wall it was stable.
+            //
+            // IB: masked stencil cells (int(CMASK) != 1, so cut cells too).
+            // The face itself has two fluid cells, so ul and ur are fluid.
+            if (wall_ghosts == 1 && using_ib == 1)
+            {
+                amrex::Real tw = 0.0; // distance to the inflow wall
+                amrex::Real uw = 0.0; // Dirichlet value at that wall
+                if (mask_L1 != 1)
+                {
+                    vel_Lm1 = 2.0 * vel_L - vel_R;
+                    vel_Lm2 = 2.0 * vel_Lm1 - vel_L;
+                    if (vel_L < 0.0)
+                    {
+                        ulm1 = 2.0 * ul - ur;
+                        ulm2 = 2.0 * ulm1 - ul;
+                    } else if (ib_inflow_wall(
+                                   left, sweepdir, -1, specid, phi, prob_lo, dx,
+                                   time, prob_parm, tw, uw))
+                    {
+                        ulm1 = ul + (uw - ul) * dx[sweepdir] / tw;
+                        ulm2 = ul + (uw - ul) * 2.0 * dx[sweepdir] / tw;
+                    } else
+                    {
+                        ulm1 = ul;
+                        ulm2 = ul;
+                    }
+                } else if (mask_L2 != 1)
+                {
+                    vel_Lm2 = 2.0 * vel_Lm1 - vel_L;
+                    if (vel_Lm1 < 0.0)
+                    {
+                        ulm2 = 2.0 * ulm1 - ul;
+                    } else if (ib_inflow_wall(
+                                   left1, sweepdir, -1, specid, phi, prob_lo,
+                                   dx, time, prob_parm, tw, uw))
+                    {
+                        ulm2 = ulm1 + (uw - ulm1) * dx[sweepdir] / tw;
+                    } else
+                    {
+                        ulm2 = ulm1;
+                    }
+                }
+                if (mask_R1 != 1)
+                {
+                    vel_Rp1 = 2.0 * vel_R - vel_L;
+                    vel_Rp2 = 2.0 * vel_Rp1 - vel_R;
+                    if (vel_R > 0.0)
+                    {
+                        urp1 = 2.0 * ur - ul;
+                        urp2 = 2.0 * urp1 - ur;
+                    } else if (ib_inflow_wall(
+                                   right, sweepdir, 1, specid, phi, prob_lo, dx,
+                                   time, prob_parm, tw, uw))
+                    {
+                        urp1 = ur + (uw - ur) * dx[sweepdir] / tw;
+                        urp2 = ur + (uw - ur) * 2.0 * dx[sweepdir] / tw;
+                    } else
+                    {
+                        urp1 = ur;
+                        urp2 = ur;
+                    }
+                } else if (mask_R2 != 1)
+                {
+                    vel_Rp2 = 2.0 * vel_Rp1 - vel_R;
+                    if (vel_Rp1 > 0.0)
+                    {
+                        urp2 = 2.0 * urp1 - ur;
+                    } else if (ib_inflow_wall(
+                                   right1, sweepdir, 1, specid, phi, prob_lo,
+                                   dx, time, prob_parm, tw, uw))
+                    {
+                        urp2 = urp1 + (uw - urp1) * dx[sweepdir] / tw;
+                    } else
+                    {
+                        urp2 = urp1;
+                    }
+                }
+            }
+
+            // Domain faces: stencil cells beyond a non-periodic face. The
+            // Dirichlet value (robin b = 0) is taken from the species BC data
+            // in the first ghost cell, and the value at the face is matched.
+            if (wall_ghosts == 1)
+            {
+                const int d = sweepdir;
+                amrex::Real* uu[6] = {&ulm2, &ulm1, &ul, &ur, &urp1, &urp2};
+                amrex::Real* vv[6] = {&vel_Lm2, &vel_Lm1, &vel_L,
+                                      &vel_R,   &vel_Rp1, &vel_Rp2};
+                IntVect base = face;
+                base[d] -= 3;
+                for (int q = 0; q < 6; ++q)
+                {
+                    IntVect c = base;
+                    c[d] += q;
+                    // periodic, axis and symmetry (zero-flux) faces keep the
+                    // FillPatch ghosts
+                    const bool lo =
+                        (c[d] < domlo[d] && bclo[d] != PERBC &&
+                         bclo[d] != AXISBC && bclo[d] != IHNEUBC);
+                    const bool hi =
+                        (c[d] > domhi[d] && bchi[d] != PERBC &&
+                         bchi[d] != AXISBC && bchi[d] != IHNEUBC);
+                    if (!lo && !hi)
+                    {
+                        continue;
+                    }
+                    IntVect c0 = c;
+                    IntVect c1 = c;
+                    IntVect gb = c;
+                    c0[d] = lo ? domlo[d] : domhi[d];
+                    c1[d] = lo ? domlo[d] + 1 : domhi[d] - 1;
+                    gb[d] = lo ? domlo[d] - 1 : domhi[d] + 1;
+                    if (using_ib == 1 &&
+                        (phi(c0, CMASK_ID) < 1.0 || phi(c1, CMASK_ID) < 1.0))
+                    {
+                        continue;
+                    }
+                    const amrex::Real m = lo ? amrex::Real(domlo[d] - c[d])
+                                             : amrex::Real(c[d] - domhi[d]);
+                    const amrex::Real w0 =
+                        (user_defined_vel == 1)
+                            ? user_transport::compute_vel(
+                                  c0, d, specid, phi, dx, time, prob_parm, Tg,
+                                  Pg)
+                            : plasmachem_transport::compute_vel(
+                                  c0, d, specid, phi, dx, time, prob_parm, Tg,
+                                  Pg);
+                    const amrex::Real w1 =
+                        (user_defined_vel == 1)
+                            ? user_transport::compute_vel(
+                                  c1, d, specid, phi, dx, time, prob_parm, Tg,
+                                  Pg)
+                            : plasmachem_transport::compute_vel(
+                                  c1, d, specid, phi, dx, time, prob_parm, Tg,
+                                  Pg);
+                    *vv[q] = w0 + m * (w0 - w1);
+                    const amrex::Real p0 = phi(c0, specid);
+                    const amrex::Real p1 = phi(c1, specid);
+                    // the BC data exist only in boxes that touch the face;
+                    // blocking_factor >= 4 (checked at start-up) keeps
+                    // every stencil cell beyond a face inside such a box
+                    const auto gd = gb.dim3();
+                    const bool has_bc = bc_a.contains(gd.x, gd.y, gd.z);
+                    const amrex::Real ra = has_bc ? bc_a(gb, fluxid) : 0.0;
+                    const amrex::Real rb = has_bc ? bc_b(gb, fluxid) : 1.0;
+                    const bool inflow = lo ? (w0 > 0.0) : (w0 < 0.0);
+                    if (inflow && rb == 0.0 && ra != 0.0)
+                    {
+                        const amrex::Real pb = bc_f(gb, fluxid) / ra;
+                        *uu[q] = pb - (2.0 * m - 1.0) * (p0 - pb);
+                    } else if (inflow)
+                    {
+                        *uu[q] = p0;
+                    } else
+                    {
+                        *uu[q] = p0 + m * (p0 - p1);
+                    }
+                }
+            }
 
             amrex::Real flm2 = ulm2 * vel_Lm2;
             amrex::Real flm1 = ulm1 * vel_Lm1;
