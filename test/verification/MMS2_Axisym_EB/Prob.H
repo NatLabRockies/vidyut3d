@@ -35,6 +35,17 @@ void amrex_probinit(ProbParm& h_prob_parm, ProbParm& d_prob_parm)
         h_prob_parm.inner_dirichlet == 0 && h_prob_parm.outer_dirichlet == 0));
     pp.query("solnfrac", h_prob_parm.solnfrac);
 
+    // E_e = een_scale * n_e. The default 1 is the original case, where the
+    // Joule term is ~1e-19 of the energy transport; 1.5 e Te0 (Te0 in volts)
+    // gives Te = Te0 e / k_B and a Joule term of the same order as transport.
+    pp.query("een_scale", h_prob_parm.een_scale);
+    if (!(h_prob_parm.een_scale > 0.0))
+    {
+        amrex::Abort(
+            "prob.een_scale must be > 0 (got " +
+            std::to_string(h_prob_parm.een_scale) + ")");
+    }
+
 #ifdef AMREX_USE_GPU
     amrex::Gpu::htod_memcpy(&d_prob_parm, &h_prob_parm, sizeof(ProbParm));
 #else
@@ -77,8 +88,8 @@ void initdomaindata(
                 phi(i, j, k, EFX_ID) = 0.0;
                 phi(i, j, k, EFY_ID) = 0.0;
                 phi(i, j, k, EFZ_ID) = 0.0;
-                phi(i, j, k, EEN_ID) =
-                    frac * (rad * rad / alpha + prob_parm->n0);
+                phi(i, j, k, EEN_ID) = frac * prob_parm->een_scale *
+                                       (rad * rad / alpha + prob_parm->n0);
                 phi(i, j, k, ETEMP_ID) = 1.0;
             }
         }

@@ -1279,7 +1279,11 @@ AMREX_GPU_DEVICE AMREX_INLINE void bc_ib(
         const amrex::Real den_coeff = (solved_comp == HEp_ID) ? 2.0_rt : 1.0_rt;
         const amrex::Real fivethird = (solved_comp == EEN_ID) ? 1.0 : 1.0_rt;
 
-        const amrex::Real soln = rad_eb * rad_eb / (den_coeff * n_alpha) + n0;
+        // E_e = een_scale * n_e (prob.een_scale; 1 is the original case)
+        const amrex::Real wall_scale =
+            (solved_comp == EEN_ID) ? prob_parm.een_scale : 1.0_rt;
+        const amrex::Real soln =
+            wall_scale * (rad_eb * rad_eb / (den_coeff * n_alpha) + n0);
 
         amrex::Real ndens = 0.0_rt;
         for (int sp = 0; sp < NUM_SPECIES; ++sp) ndens += sb_arr(intcell, sp);
@@ -1723,9 +1727,13 @@ AMREX_GPU_DEVICE AMREX_INLINE void species_bc(
         robin_b(ghost_cell, bcspec_id) = 1.0;
         robin_f(ghost_cell, bcspec_id) = 0.0;
 
-        if (spec_id == E_ID || spec_id == HEp_ID || spec_id == EEN_ID)
+        if (spec_id == E_ID || spec_id == HEp_ID)
         {
             bcarr(ghost_cell, bcspec_id) = 0.0 + prob_parm.n0;
+        }
+        if (spec_id == EEN_ID)
+        {
+            bcarr(ghost_cell, bcspec_id) = prob_parm.een_scale * prob_parm.n0;
         }
 
     } else
@@ -1748,7 +1756,8 @@ AMREX_GPU_DEVICE AMREX_INLINE void species_bc(
 
         if (spec_id == EEN_ID)
         {
-            bcarr(ghost_cell, bcspec_id) = 1.0 / alpha + prob_parm.n0;
+            bcarr(ghost_cell, bcspec_id) =
+                prob_parm.een_scale * (1.0 / alpha + prob_parm.n0);
         }
     }
 }

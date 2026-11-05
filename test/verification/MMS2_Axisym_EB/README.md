@@ -113,3 +113,84 @@ and the paper's results are unaffected either way.
 The refined band covers the whole annulus, so the fluid ends up entirely at the
 fine spacing and the hierarchy reproduces the uniform grid of that spacing to
 every digit.
+
+### Joule heating (`inputs2d_joule`)
+
+The solver advances the electron energy as
+
+$$\partial_t E_e = -\nabla\cdot\Gamma_\varepsilon + q\,\Gamma_e\cdot\mathbf{E} + S_\varepsilon,
+\qquad q = -e,$$
+
+where $\Gamma_\varepsilon = \tfrac53(\mu_e E_e \mathbf{E} - D_e\nabla E_e)$ and
+$\Gamma_e = \mu_e n_e \mathbf{E} - D_e \nabla n_e$. The Joule term $q\,\Gamma_e\cdot\mathbf{E}$
+is added in `Source/ElecEnergySource.cpp`. The manufactured source is therefore
+
+$$S_\varepsilon = \nabla\cdot\Gamma_\varepsilon + e\,\Gamma_e\cdot\mathbf{E}.$$
+
+`UserSources.H` used $-e\,\Gamma_e\cdot\mathbf{E}$ until 2026-11-03. With
+`inputs2d` this makes no difference: there $E_e = n_e$, which corresponds to an
+electron temperature of order $10^{18}$ eV, and the Joule term is $10^{-22}$ to
+$10^{-19}$ of $\nabla\cdot\Gamma_\varepsilon$. The table above is unchanged by
+the correction, and `inputs2d` does not test Joule heating at all.
+
+`inputs2d_joule` sets `prob.een_scale` $= \tfrac32 e T_0$ with $T_0 = 0.1$ V, so that
+
+$$E_e = \tfrac32 e T_0\, n_e, \qquad T_e = \tfrac23\frac{E_e}{k_B n_e} = 1160.45\ \mathrm{K}.$$
+
+The ratio $|e\,\Gamma_e\cdot\mathbf{E}| / |\nabla\cdot\Gamma_\varepsilon|$ then
+ranges from 0.016 at $r = 0.5$ through 0.29 at $r = 1$ to about 19 at $r = 1.5$,
+where $\nabla\cdot\Gamma_\varepsilon$ tends to zero; $S_\varepsilon$ changes sign
+near $r = 1.26$. The deck also backs $T_e$ out of
+$E_e/n_e$ (`vidyut.freeze_etemp = 0`), solves the energy equation for
+$E_e / $`vidyut.elecenergy_scale`, and keeps `vidyut.floor_jh = 0`, because
+$\Gamma_e\cdot\mathbf{E} > 0$ here and the floor would clip the term to zero.
+Everything else is the same as `inputs2d`.
+
+| Input | Default | Effect |
+|---|---|---|
+| `prob.een_scale` | 1 | $E_e = $ `een_scale` $\cdot\, n_e$; must be $> 0$ (the run aborts otherwise) |
+
+```
+for N in 32 64 128; do mkdir -p j$N; (cd j$N && mpirun -np 1 ../*.ex ../inputs2d_joule amr.n_cell=$N $N 1); done
+python3 check_errors.py j32/plt00001 j64/plt00001 j128/plt00001 --deck inputs2d_joule
+```
+
+`check_errors.py` reads the plotfiles with numpy only and uses the same mask and
+normalization as `all_errors.py` (it reproduces the table above to every printed
+digit). `--deck` reads `prob.een_scale` from the input file. `all_errors.py`
+assumes $E_e = n_e$ and reports a meaningless energy error for a Joule run.
+CI runs the 32 and 64 grids and requires an observed order of at least 1.8 for
+$E_e$ and $T_e$. Relative $L_2$ errors:
+
+| $N_x$ | $E_e$ | $p$ | $T_e$ | $p$ | $E_e$, old sign | $p$ |
+|---|---|---|---|---|---|---|
+| 32  | 4.640e-03 | --   | 5.027e-03 | --   | 1.872e-01 | --   |
+| 64  | 1.167e-03 | 1.99 | 1.281e-03 | 1.97 | 1.776e-01 | 0.08 |
+| 128 | 2.828e-04 | 2.05 | 2.597e-04 | 2.30 | 1.683e-01 | 0.08 |
+| 256 | 6.581e-05 | 2.10 | 5.593e-05 | 2.22 | 1.635e-01 | 0.04 |
+
+With the old sign the energy error stays near 18 % and does not converge.
+$\phi$, $n_e$ and $n_i$ are the same as in `inputs2d`, since the energy does not
+feed back into them in this case. Because $E_e = $ `een_scale` $\cdot\, n_e$, the
+$E_e$ and $n_e$ equations share nearly the same operator and part of their
+error cancels in $T_e$, so $E_e$ is the stronger of the two checks (the $n_e$
+error is in the main table above).
+
+The Joule source itself is plotted as `Electron_Jheat`. Its $L_\infty$ error
+against $-e\,\Gamma_e\cdot\mathbf{E}$, relative to the largest exact value, is
+about first order in the fluid cells next to the wall:
+
+| $N_x$ | interior | wall-adjacent cells |
+|---|---|---|
+| 32  | 4.73e-02 | 3.94e-02 |
+| 64  | 1.60e-02 | 3.16e-02 |
+| 128 | 6.74e-03 | 1.99e-02 |
+| 256 | 3.32e-03 | 1.14e-02 |
+
+The cut-face branch of `Source/ElecEnergySource.cpp` uses the fluid-cell
+density as the face value and a one-sided gradient at the face, and the face
+field near the wall is first order. With Dirichlet energy walls an $O(1)$
+source error confined to one cell layer changes $E_e$ only at $O(h^2)$, which
+is why $E_e$ still converges at second order. This test therefore checks the
+sign and presence of the Joule term, not its pointwise accuracy, which is
+below second order even away from the wall in this table.

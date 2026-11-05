@@ -118,8 +118,10 @@ vidyut.linsolve_maxiter = 1000
 
 
 
-# The manufactured EEN here is a plain scalar, so Te must stay at the constant
-# initdomaindata sets rather than being backed out of the energy density, which
-# would corrupt the ETEMP-dependent transport coefficients the source term was
-# derived with. See vidyut.freeze_etemp in Source/Vidyut.H.
+# The manufactured EEN here equals n_e, so a Te backed out of it would be of
+# order 1e22 K. Chemistry.H's transport coefficients do not depend on Te, so
+# this would not change the answer, but Te is kept at the constant
+# initdomaindata sets so the plotfile shows a sensible value. inputs2d_joule
+# uses a physically scaled EEN and backs Te out. See vidyut.freeze_etemp in
+# Source/Vidyut.H.
 vidyut.freeze_etemp = 1
