@@ -1,0 +1,125 @@
+max_step  = 720
+stop_time = 1000
+
+# PROBLEM SIZE & GEOMETRY
+geometry.is_periodic =  0 0
+geometry.coord_sys   =  0       # 0 => cart, 1 => RZ (axisymmetric)
+geometry.prob_lo     =  -3     -3
+geometry.prob_hi     =   3      3
+amr.n_cell           = 64 64
+
+# EB
+eb2.geom_type = gecmms
+eb2.chamber_r  = 2.6      # chamber wall, fluid inside, off-centre, clear of the box
+eb2.chamber_cx = 0.05
+eb2.chamber_cy = -0.03
+eb2.electrode_r = 1.125   # 6 x 0.1875
+eb2.gap_half    = 0.5625  # 3 x 0.1875: flat faces lie on grid lines for n >= 32
+eb2.dome_xc     = 0.04
+eb2.stem_halfwidth = 0.45
+eb2.stem_y0     = 1.3625
+eb2.plate_half  = 2.0625  # 11 x 0.1875: flat top/bottom plates on grid lines; <=0 disables
+eb2.shiftx = 0.0          # rigid shift of the whole geometry (sub-cell sweep)
+eb2.shifty = 0.0
+
+# degenerate-cell safeguards
+prob.corner_fallback = 1
+prob.d_floor_frac    = 0.5
+prob.proj_switch     = 0
+prob.face_fallback   = 1
+prob.ray_dirichlet   = 1   # 1: wall value at the face-direction ray hit point instead of the foot of the normal (paper: ray_perface)
+prob.perface_fallback = 1   # 1: per-face wall lookup at cells touching two walls (concave corners) (paper: ray_perface)
+
+# VERBOSITY
+amr.v              = 1       # verbosity in Amr
+
+# RESTART
+# amr.restart = chk00020
+
+# REFINEMENT
+amr.max_level       = 0       # maximum level number allowed
+amr.blocking_factor = 16       # block factor in grid generation
+amr.max_grid_size   = 32
+
+amr.regrid_int      = 1       # how often to regrid
+
+# TIME STEP CONTROL
+vidyut.dt             = 0.01
+vidyut.hyp_order=5
+vidyut.num_timestep_correctors=1
+
+
+
+
+vidyut.user_defined_potential = 1
+vidyut.user_defined_species = 1
+vidyut.user_defined_vel = 1
+vidyut.using_ib=1
+
+vidyut.bound_specden=0
+vidyut.min_species_density=1e-11
+vidyut.min_electron_density=1e-11
+vidyut.min_electron_temp=1e-11
+vidyut.linsolve_maxiter=200
+vidyut.elecenergy_solve=1
+# The manufactured electron energy is a plain scalar (r^2/alpha + n0), not
+# 3/2 n_e k_B T_e; backing T_e out of it would change the transport
+# coefficients. The paper runs kept T_e at its initial value.
+vidyut.freeze_etemp=1
+vidyut.bg_species_ids=1
+vidyut.gas_temperature=1e-50
+
+#0 - periodic
+#1 - Dirichlet
+#2 - Homogeneous Neumann
+#3 - Inhomogeneous Neumann
+#4 - Robin
+
+prob.inner_radius=0.5
+prob.outer_radius=1.5
+prob.a_inner_dir = 1.0
+prob.b_inner_neumann = 0.0
+prob.a_outer_dir = 1.0
+prob.b_outer_neumann = 0.0
+
+vidyut.pot_bc_lo = 4 4
+vidyut.pot_bc_hi = 4 4
+
+vidyut.eden_bc_lo = 1 1
+vidyut.eden_bc_hi = 1 1
+
+vidyut.eenrg_bc_lo = 1 1
+vidyut.eenrg_bc_hi = 1 1
+
+vidyut.ion_bc_lo = 1 1
+vidyut.ion_bc_hi = 1 1
+
+vidyut.neutral_bc_lo = 2 2
+vidyut.neutral_bc_hi = 2 2
+
+#vidyut.pot_bc_lo = 0 0
+#vidyut.pot_bc_hi = 0 0
+
+#vidyut.eden_bc_lo = 0 0
+#vidyut.eden_bc_hi = 0 0
+
+#vidyut.eenrg_bc_lo = 0 0
+#vidyut.eenrg_bc_hi = 0 0
+
+#vidyut.ion_bc_lo = 0 0
+#vidyut.ion_bc_hi = 0 0
+
+#vidyut.neutral_bc_lo = 0 0
+#vidyut.neutral_bc_hi = 0 0
+
+# PLOTFILES
+amr.plot_file  = plt    # root name of plot file
+amr.plot_int   = 1000     # number of timesteps between plot files
+
+# CHECKPOINT
+amr.chk_file = chk      # root name of checkpoint file
+amr.chk_int  = 1000      # number of timesteps between checkpoint files
+
+vidyut.linsolve_reltol = 1.0e-12
+vidyut.linsolve_abstol = 1.0e-14
+vidyut.linsolve_maxiter = 1000
