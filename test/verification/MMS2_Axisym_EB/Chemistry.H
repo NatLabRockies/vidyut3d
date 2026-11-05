@@ -306,31 +306,38 @@ AMREX_GPU_HOST_DEVICE AMREX_FORCE_INLINE void productionRate(
     amrex::Real ne = sc[E_ID] * 6.02214085774e23;
     amrex::Real Ue = 1.5 * Te * ne * 1.380649e-23;
 
-    {
-        // reaction 0:  HE + E => E + HEp + E
-        // const amrex::Real k_f = 50.0*std::exp(-0.2/Te)*6.02214076e23;
-        const amrex::Real Ta = 2.0 / K_B;
-        const amrex::Real k_f = 5.0 * std::exp(-Ta / Te) * 6.02214076e23;
-        const amrex::Real qf = k_f * (sc[0] * sc[1]);
-        const amrex::Real qr = 0.0;
-        const amrex::Real qdot = qf - qr;
-        wdot[0] += qdot;
-        wdot[1] -= qdot;
-        wdot[2] += qdot;
-        int rxntype = 2;
-        amrex::Real eV2J = 1.602176620800000e-19; // eV -> J
-        amrex::Real eexci = 4.0 / eV2J;
-        int elidx = 0;
-        comp_ener_exch(
-            qf, qr, sc, k_f, rxntype, eexci, elidx, enerExch, Ue, tc[1], Te);
-    }
+    // CHEMISTRY IS DELIBERATELY OFF FOR THIS CASE.
+    //
+    // This is a pure-transport manufactured solution: add_user_react_sources
+    // in UserSources.H supplies a source derived from transport terms only,
+    // and it uses -= , so it ADDS to whatever is left here rather than
+    // replacing it. Anything non-zero below would therefore enter the solved
+    // equations without a matching term in the manufactured source, and the
+    // case would stop being a consistent MMS.
+    //
+    // The reaction and the elastic-loss term that used to sit here are kept
+    // below for reference. They contributed nothing, but only by accident:
+    // Ta = 2.0 / K_B is 1.45e23 K, so exp(-Ta/Te) underflows to exactly zero
+    // at ANY temperature - 2.0 looks like it was meant as 2 eV, which would
+    // give Ta = 2.3e4 K. The elastic term was genuinely non-zero, though only
+    // ~6e-11 against an energy-equation right-hand side of ~1e11. Relying on
+    // an underflow and on a term being small is not the same as having no
+    // chemistry, so the terms are now removed rather than left to be
+    // reactivated by a change of temperature or a units fix elsewhere.
+    //
+    //  {
+    //      // reaction 0:  HE + E => E + HEp + E
+    //      const amrex::Real Ta = 2.0 / K_B;
+    //      const amrex::Real k_f = 5.0 * std::exp(-Ta / Te) * 6.02214076e23;
+    //      ... wdot[0] += qdot; wdot[1] -= qdot; wdot[2] += qdot;
+    //      comp_ener_exch(...);
+    //  }
+    //  // electron energy loss via elastic collisions
+    //  amrex::Real nu = 10000.0;
+    //  *enerExch -= 3.0 / 2.0 * sc[0] * N_A * (K_B * Te - K_B * tc[1]) * nu *
+    //               (2.0 * ME / (4.0 * M_AMU));
 
-    // Calculate electron energy loss via elastic collisions
-    amrex::Real nu = 10000.0;
-    amrex::Real elec_elastic_coll_term = 3.0 / 2.0 * sc[0] * N_A *
-                                         (K_B * Te - K_B * tc[1]) * nu *
-                                         (2.0 * ME / (4.0 * M_AMU));
-    *enerExch -= elec_elastic_coll_term;
+    amrex::ignore_unused(mixture, g_RT, ne, Ue, refCinv);
 }
 
 // compute the production rate for each species

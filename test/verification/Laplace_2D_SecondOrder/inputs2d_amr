@@ -1,0 +1,95 @@
+# Laplace between two concentric circles, solved with EB geometry and two
+# levels of static refinement locked to the immersed boundary.
+#
+# vidyut.refine_cutcells tags the cells the boundary passes through, so the
+# refined region is fixed by the geometry and does not move over the run.
+# amr.n_error_buf widens the refined band into the fluid on either side.
+#
+# Exact solution and error script are the same as inputs2d:
+#   python3 ../Laplace_2D/get_error.py -f .
+
+max_step  = 10
+stop_time = 2e-8
+
+# PROBLEM SIZE & GEOMETRY
+geometry.is_periodic =  1 1
+geometry.coord_sys   =  0       # 0 => cart, 1 => RZ (axisymmetric)
+geometry.prob_lo     =  -0.3     -0.3
+geometry.prob_hi     =   0.3      0.3
+amr.n_cell           = 64 64
+
+# VERBOSITY
+amr.v              = 1       # verbosity in Amr
+
+# REFINEMENT
+amr.max_level       = 2       # maximum level number allowed
+amr.blocking_factor = 8       # block factor in grid generation
+amr.max_grid_size   = 32
+# 8, not 2, to match what the README recommends: this deck used to ship with 2
+# while the README said to use at least 4 and preferably 8.
+#
+# 2 is not unsafe - the run-time clearance check passes with three coarse cells
+# to spare and prints no warning - but it is not what this case is meant to
+# show. The README's measured table has the largest error sitting AT the
+# coarse-fine interface at 2 (phi Linf and CF-zone Linf both 1.502e-3), whereas
+# at 8 the interface error drops to 4.599e-4, the maximum moves back to the
+# immersed boundary where it belongs, and the composite matches uniform 512 in
+# the max norm with 40% fewer cells.
+amr.n_error_buf     = 8       # fluid cells kept refined on either side of the boundary
+
+# The cut cells never move, so the grids are the same at every regrid. Regrid
+# once at startup and leave the hierarchy alone for the rest of the run.
+amr.regrid_int      = 1000000
+
+# Static, geometry-locked refinement on the EB cut cells
+vidyut.refine_cutcells = 1
+vidyut.cutcell_vfrac_lo = 0.0   # tag cells with cutcell_vfrac_lo < vfrac < cutcell_vfrac_hi
+vidyut.cutcell_vfrac_hi = 1.0
+
+# TIME STEP CONTROL
+vidyut.dt             = 1e-13
+vidyut.num_timestep_correctors = 1
+vidyut.hyp_order = 5
+
+vidyut.user_defined_potential = 1
+vidyut.user_defined_species = 1
+vidyut.user_defined_vel = 1
+vidyut.using_ib=1
+
+#0 - periodic
+#1 - Dirichlet
+#2 - Homogenous Neumann
+#3 - Inhomogenous Neumann
+#4 - Robin
+
+prob.inner_radius=0.1
+prob.outer_radius=0.2
+prob.inner_voltage=10.0
+prob.outer_voltage=20.0
+prob.a_inner_dir = 1.0
+prob.b_inner_neumann = 0.0
+prob.a_outer_dir = 1.0
+prob.b_outer_neumann = 0.0
+
+vidyut.pot_bc_lo = 0 0
+vidyut.pot_bc_hi = 0 0
+
+vidyut.eden_bc_lo = 0 0
+vidyut.eden_bc_hi = 0 0
+
+vidyut.eenrg_bc_lo = 0 0
+vidyut.eenrg_bc_hi = 0 0
+
+vidyut.ion_bc_lo = 0 0
+vidyut.ion_bc_hi = 0 0
+
+vidyut.neutral_bc_lo = 0 0
+vidyut.neutral_bc_hi = 0 0
+
+# PLOTFILES
+amr.plot_file  = plt    # root name of plot file
+amr.plot_int   = 10     # number of timesteps between plot files
+
+# CHECKPOINT
+amr.chk_file = chk      # root name of checkpoint file
+amr.chk_int  = 1000      # number of timesteps between checkpoint files

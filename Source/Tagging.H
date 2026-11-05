@@ -27,6 +27,62 @@ void state_based_refinement(
     }
 }
 
+// Tag the immersed-boundary cut cells, i.e. the cells the boundary passes
+// through, identified by a volume fraction strictly between vfrac_lo and
+// vfrac_hi. The geometry does not move, so the tagged set is the same at
+// every regrid and the refinement is static. Widen the refined band into the
+// fluid with amr.n_error_buf.
+// Tag every cell whose centre lies inside a user-specified box, in physical
+// coordinates. Static and geometry independent, so it refines the same region
+// on every regrid. Useful to pin refinement to a region of interest, and it is
+// the only way to place a coarse-fine interface deliberately - which the
+// periodic coarse-fine test relies on.
+AMREX_GPU_HOST_DEVICE
+AMREX_FORCE_INLINE
+void box_based_refinement(
+    int i,
+    int j,
+    int k,
+    amrex::Array4<char> const& tag,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> prob_lo,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> dx,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> blo,
+    amrex::GpuArray<amrex::Real, AMREX_SPACEDIM> bhi,
+    char tagval)
+{
+    const int idx[3] = {AMREX_D_DECL(i, j, k)};
+    bool inside = true;
+    for (int d = 0; d < AMREX_SPACEDIM; d++)
+    {
+        const amrex::Real c = prob_lo[d] + (idx[d] + 0.5) * dx[d];
+        if (c < blo[d] || c > bhi[d]) inside = false;
+    }
+    if (inside)
+    {
+        tag(i, j, k) = tagval;
+    }
+}
+
+AMREX_GPU_HOST_DEVICE
+AMREX_FORCE_INLINE
+void cutcell_based_refinement(
+    int i,
+    int j,
+    int k,
+    amrex::Array4<char> const& tag,
+    amrex::Array4<amrex::Real const> const& state,
+    int cmask_comp,
+    amrex::Real vfrac_lo,
+    amrex::Real vfrac_hi,
+    char tagval)
+{
+    const amrex::Real vfrac = state(i, j, k, cmask_comp);
+    if (vfrac > vfrac_lo && vfrac < vfrac_hi)
+    {
+        tag(i, j, k) = tagval;
+    }
+}
+
 AMREX_GPU_HOST_DEVICE
 AMREX_FORCE_INLINE
 void stategrad_based_refinement(

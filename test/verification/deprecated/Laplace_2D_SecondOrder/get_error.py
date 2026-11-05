@@ -17,29 +17,25 @@ cmap = [
     "#B43894",
     "#010202",
 ]
-markertype = ["s", "d", "o", "p", "h", "s","*",'p']
+markertype = ["s", "d", "o", "p", "h", "s","*"]
 
 
 def exact_solution(rad, rmin, rmax, phi1, phi2):
-    #return (phi2 * np.log(rad / rmin) + phi1 * np.log(rmax / rad)) / np.log(rmax / rmin)
-    return 1/32 * rad**4
+    return (phi2 * np.log(rad / rmin) + phi1 * np.log(rmax / rad)) / np.log(rmax / rmin)
 
 
 def exact_solution_grad(rad, rmin, rmax, phi1, phi2):
-    #return (phi2 - phi1) / (rad * np.log(rmax / rmin))
-    return 1.0/8.0 * rad **3
+    return (phi2 - phi1) / (rad * np.log(rmax / rmin))
 
 
 def exact_solution_gradx(x, y, rmin, rmax, phi1, phi2):
     r = np.sqrt(x**2 + y**2)
-    #return (phi2 - phi1) * x / (r**2 * np.log(rmax / rmin))
-    return 4.0/32.0 * x * r**2
+    return (phi2 - phi1) * x / (r**2 * np.log(rmax / rmin))
 
 
 def exact_solution_grady(x, y, rmin, rmax, phi1, phi2):
     r = np.sqrt(x**2 + y**2)
-    #return (phi2 - phi1) * y / (r**2 * np.log(rmax / rmin))
-    return 4.0/32.0 * y * r**2
+    return (phi2 - phi1) * y / (r**2 * np.log(rmax / rmin))
 
 
 def main():
@@ -55,8 +51,8 @@ def main():
     )
     args = parser.parse_args()
 
-    rmin = 0.5
-    rmax = 1.5
+    rmin = 0.1
+    rmax = 0.2
     phi2 = 20.0
     phi1 = 10.0
 
@@ -64,13 +60,10 @@ def main():
         lst = []
         folders = [x for x in os.listdir(fdir)]
         #print(folders)
-        folders= ["16","32","64","128","256","512","768","1024"]
+        folders= ["16", "32", "64", "128", "256", "512"]
         folders.sort(key=lambda x: int(x))
         for k, fname in enumerate(folders):
-            try:
-                ds = yt.load(f"{fdir}/{fname}/plt00001")
-            except:
-                continue
+            ds = yt.load(f"{fdir}/{fname}/plt00001")
             dims = ds.domain_dimensions
             prob_lo = ds.domain_left_edge.d
             prob_hi = ds.domain_right_edge.d
